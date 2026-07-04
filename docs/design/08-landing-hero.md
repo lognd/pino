@@ -14,18 +14,50 @@ Behind the MEL PINO wordmark runs a slow-motion firing sequence
 drifting). It does not autoplay like a video: the viewer's horizontal
 cursor position scrubs it.
 
-- Cursor at left edge = sequence start; right edge = sequence end.
-  Move right, the shot advances; move left, it runs backward.
+REVISION 2 (binding user feedback, 2026-07-04): the first
+implementation read as "flash game" -- the blast and casing appeared
+from nowhere, edge-to-edge activation felt indiscriminate, and the
+shatter was too uniform. The following are now hard requirements:
+
+- **The shot comes from somewhere.** Draw NO weapon imagery at all --
+  no handgun, no silhouette (user clarification, twice: the fix is
+  not adding a gun). The failure was that the casing and flash
+  appeared from nowhere, mid-field. Fix: one consistent OFF-FRAME ORIGIN just outside one
+  side of the hero (pick a point ~10% beyond the frame edge, barrel
+  height). Everything is motivated by it: the muzzle flash is light
+  SPILLING IN from that edge (directional bloom + rim light raking
+  across the wordmark, brightest at the origin edge, not a centered
+  fireball), the casing ENTERS FRAME from that origin with a
+  believable ballistic arc and tumble, and the smoke drifts in from
+  the same edge. A viewer should read "something fired just
+  off-screen" without seeing it.
+- **Professional finish over spectacle.** Fewer, softer, better:
+  layered bloom with a hot white core and brief red rim, subtle film
+  grain/vignette over the whole hero field, no confetti-like sparks.
+  If a detail cannot be made to look deliberate, cut it.
+
+- Cursor maps to progress across an INNER ACTIVE BAND, not the full
+  viewport: the band spans the central region of the hero, inset at
+  least 15% of hero width from each side (tune in /hero-lab). Cursor
+  left of the band clamps to 0, right of it clamps to 1; vertical
+  position is ignored but the pointer must be over the hero section
+  at all for scrubbing to engage. Move right, the shot advances;
+  move left, it reverses.
 - The mapping is EASED, not linear: cursor position feeds a target
   progress; displayed progress chases it with critically-damped
   smoothing (spring or exponential smoothing, ~200-350ms settle) so
   motion feels weighty, never twitchy. Fast mouse sweeps produce a
   fast-but-smooth scrub, micro-jitters produce nothing visible.
-- Idle (no pointer movement for 3s, or touch devices, where there is
-  no hover at all): progress drifts forward on its own at roughly
-  1/20 real speed, ping-ponging (forward to end, reverse to start) so
-  the hero is always subtly alive. Any pointer movement blends back
-  to cursor control over ~500ms (no snap).
+- Idle (no pointer movement for 3s, pointer left the hero, or touch
+  devices where there is no hover): REVISED -- the sequence settles
+  home instead of ping-ponging. Progress eases slowly (4-6s,
+  ease-out) toward the nearest assembled extreme (0 if progress <
+  SHOT_MOMENT, else 1), so the wordmark visibly DRIFTS BACK TOGETHER
+  and comes to rest whole. At rest the hero stays subtly alive
+  through ambient smoke/grain only -- no progress movement. Any
+  pointer movement inside the active band blends back to cursor
+  control over ~500ms (no snap). Touch devices: a single slow
+  settle-through on load (0 -> 1 over ~8s, one time), then rest.
 - **Reactive wordmark**: the lockup shatters and recombines on the
   same timeline. Define `SHOT_MOMENT` (progress value where the
   muzzle flash peaks, e.g. 0.35). As progress crosses outward from
@@ -87,9 +119,31 @@ export interface ScrubSource {
   wordmark so they can never desync.
 - `hero/Wordmark.tsx` -- inline SVG lockup (MEL in red, PINO in
   white, heavy condensed italic per 09) pre-split into ~12-20 shard
-  polygons (hand-drawn shard boundaries in the SVG asset, id'd
-  `shard-*`); a pure `progress -> transform` map per shard. Fragments
+  polygons; a pure `progress -> transform` map per shard. Fragments
   must reassemble to a pixel-perfect lockup at progress extremes.
+  REVISED shatter-quality bar (Revision 2): uniform triangle grids
+  read as cheap. Shards must follow a RADIAL CRACK tessellation
+  seeded from an impact point on the lockup (roughly where the muzzle
+  points): long slivers radiating from impact, smaller fragments near
+  it, larger slabs at the periphery -- like laminated glass. Per-shard
+  motion gets (a) a small deterministic stagger (shards nearer the
+  impact move earlier/farther on the shatter envelope), (b) depth
+  cues: rotation up to ~25deg, scale 0.92-1.06, opacity falloff with
+  distance, (c) displacement along the radial vector from impact,
+  never a uniform explosion. Still a pure function of progress --
+  determinism and extremes-identity rules are unchanged.
+- `hero/Bullethole.tsx` + `hero/useBulletholeClicks.ts` (Revision 2,
+  NEW) -- click feedback for interactive elements site-wide: on
+  pointerdown on an opted-in element (nav links, CTA buttons), spawn
+  a brief bullet-hole-in-glass effect AT the click point: dark core,
+  white-hot rim, 5-8 radiating crack lines with slight randomness
+  (seeded per click position), fading out over ~600ms. Implemented as
+  a portal overlay (never intercepts events, pointer-events: none;
+  the underlying navigation/click proceeds untouched -- if the effect
+  ever delays navigation it is wrong). Respects
+  prefers-reduced-motion (no effect at all). Exported from hero/ but
+  wired into Shell/BigButton by the app layer, so hero/ stays
+  standalone. Zero effect on a11y: purely decorative, aria-hidden.
 - `hero/Hero.tsx` -- composition + lazy init + fallback logic.
 
 ## Degradation ladder (each rung REQUIRED)
@@ -117,7 +171,14 @@ export interface ScrubSource {
 ## Acceptance criteria (the prototype demo checklist)
 
 - Scrub right/left advances/reverses smoothly; releasing the pointer
-  mid-sequence leaves the frame parked (then idle drift after 3s).
+  mid-sequence parks briefly, then the sequence settles home and the
+  wordmark visibly reassembles (Revision 2 idle rule).
+- The blast visibly originates from the rendered weapon silhouette;
+  a first-time viewer can say what fired. Scrub only engages inside
+  the inset active band.
+- Clicking a nav link/CTA leaves a fading bullet-hole/glass-crack at
+  the click point without delaying navigation (and never under
+  reduced motion).
 - Wordmark shatter is fully deterministic under back-and-forth
   scrubbing (record progress=0.6 twice, identical pixels).
 - Toggling `VITE_HERO_SOURCE` swaps simulated -> (stub) video with

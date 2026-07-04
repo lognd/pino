@@ -1,0 +1,45 @@
+# Build artifacts
+build/
+dist/
+*.egg-info/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+*.o
+*.a
+*.so
+*.dylib
+target/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Node
+node_modules/
+test-results/
+playwright-report/
+
+# frob local state
+.frob/
+FROBLEMS.md
+
+# IDE
+.idea/
+
+# Logs and local data
+logs/
+*.log
+data/
+
+# Secrets
+.env
+.env.local
+.env.production

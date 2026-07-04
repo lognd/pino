@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /booking/
+Disallow: /pay/
+
+Sitemap: https://example.com/sitemap.xml

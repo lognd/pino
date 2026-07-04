@@ -1,0 +1,25 @@
+/* Color tokens -- see docs/design/09-design-system.md, the single source
+   of truth for these values. Do not hand-edit a value here without
+   updating that doc in the same change (NO DUPLICATION: this file and
+   doc 09's fenced block must never drift apart). No light theme -- this
+   brand is dark by identity, not by trend (doc 09); the variable
+   indirection still keeps a future data-theme="light" override cheap. */
+:root {
+  --mp-black: #0a0a0b; /* page ground -- near-black, not #000, so pure-black
+                           hero media reads deeper */
+  --mp-black-true: #000000; /* hero field + wordmark lockup ground */
+  --mp-surface: #161618; /* cards, panels */
+  --mp-white: #f4f4f2; /* primary text -- warm off-white */
+  --mp-muted: #9a9a96; /* secondary text -- AA on --mp-black only at
+                           >= 18px; never for body copy */
+  --mp-red: #e8112d; /* THE brand red: CTAs, "MEL", accents */
+  --mp-red-press: #c00e26; /* pressed/hover CTA state */
+  --mp-border: #2a2a2e;
+  --mp-success: #3fa34d; /* paid/confirmed -- always with a text label */
+  --mp-warn: #e5a50a; /* pending/waitlist -- always with a label */
+
+  /* The single sanctioned diagonal-cut angle (section dividers, the red
+     CTA band) -- echoes the wordmark's italic lean. Same angle
+     everywhere; see tailwind.config.ts's `skew.mp` utility. */
+  --mp-skew: -8deg;
+}

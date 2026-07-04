@@ -1,0 +1,28 @@
+@import "./tokens.css";
+
+/* Self-hosted, OFL-licensed fonts -- ships to every visitor regardless of
+   what's installed on their system, no third-party font CDN at runtime
+   (doc 09). @fontsource-variable/barlow does not exist as a published
+   package (checked against the npm registry) -- plain @fontsource/barlow
+   static weights are used instead, per the scaffold spec's fallback
+   instruction. Barlow Condensed only needs the heavy italic weights the
+   display type scale actually uses (800/900 italic, ALL-CAPS per doc 09);
+   Barlow covers body/UI at 400/600. */
+@import "@fontsource/barlow-condensed/800-italic.css";
+@import "@fontsource/barlow-condensed/900-italic.css";
+@import "@fontsource/barlow/400.css";
+@import "@fontsource/barlow/600.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background-color: var(--mp-black);
+}

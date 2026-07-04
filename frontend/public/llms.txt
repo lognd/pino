@@ -1,0 +1,20 @@
+# Mel Pino (SAMPLE)
+
+> SAMPLE -- Mel Pino teaches firearms law, concealed-carry certification,
+> and shooting technique in Clearwater, Florida. This summary is
+> placeholder content; see docs/design/10-seo-and-content.md.
+
+## Pages
+
+- Home (SAMPLE): overview and primary booking call to action.
+- Courses (SAMPLE): concealed-carry certification, group technique
+  classes, private 1:1 instruction.
+- About (SAMPLE): instructor bio and credentials.
+- Contact (SAMPLE): phone and email.
+
+## Notes for agents
+
+- All content on this site is currently SAMPLE placeholder data pending
+  real business information from the site owner.
+- `/admin/*` is an authenticated, non-public application surface --
+  disallowed in robots.txt.

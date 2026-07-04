@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PLACEHOLDER wordmark lockup -- to be replaced by the real traced,
+  shard-split asset per docs/design/08-landing-hero.md (each shard needs
+  its own id'd polygon, ~12-20 shards, for the reactive shatter effect).
+  TODO(impl) P1: replace with the traced shard-split SVG; see
+  frontend/public/brand/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 240" role="img" aria-label="Mel Pino">
+  <rect x="0" y="0" width="640" height="240" fill="#000000" />
+  <text
+    x="40"
+    y="150"
+    font-family="sans-serif"
+    font-weight="bold"
+    font-style="italic"
+    font-size="120"
+    fill="#E8112D"
+  >MEL</text>
+  <text
+    x="300"
+    y="150"
+    font-family="sans-serif"
+    font-weight="bold"
+    font-style="italic"
+    font-size="120"
+    fill="#F4F4F2"
+  >PINO</text>
+</svg>

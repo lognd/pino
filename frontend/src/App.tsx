@@ -1,0 +1,110 @@
+// Route table -- docs/design/07-frontend-architecture.md's directory
+// structure and docs/design/14-admin-mockup.md's route list.
+//
+// TODO(impl): docs/design/07-frontend-architecture.md
+
+import { Routes, Route } from "react-router-dom";
+import { Shell } from "./app/layout/Shell";
+import { AdminGuard } from "./app/layout/AdminGuard";
+import { Landing } from "./app/routes/public/Landing";
+import { Courses } from "./app/routes/public/Courses";
+import { CourseDetail } from "./app/routes/public/CourseDetail";
+import { About } from "./app/routes/public/About";
+import { Contact } from "./app/routes/public/Contact";
+import { Book } from "./app/routes/public/Book";
+import { ManageBooking } from "./app/routes/public/ManageBooking";
+import { Pay } from "./app/routes/public/Pay";
+import { Legal } from "./app/routes/public/Legal";
+import { AdminLogin } from "./app/routes/admin/Login";
+import { AdminDashboard } from "./app/routes/admin/Dashboard";
+import { AdminSchedule } from "./app/routes/admin/Schedule";
+import { AdminSessionDetail } from "./app/routes/admin/SessionDetail";
+import { AdminStudents } from "./app/routes/admin/Students";
+import { AdminInvoices } from "./app/routes/admin/Invoices";
+import { AdminRecordPayment } from "./app/routes/admin/RecordPayment";
+import { AdminWaivers } from "./app/routes/admin/Waivers";
+import { AdminSettings } from "./app/routes/admin/Settings";
+
+export function App() {
+  return (
+    <Shell>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/courses" element={<Courses />} />
+        <Route path="/courses/:slug" element={<CourseDetail />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/book" element={<Book />} />
+        <Route path="/booking/:token" element={<ManageBooking />} />
+        <Route path="/pay/:token" element={<Pay />} />
+        <Route path="/legal/:page" element={<Legal />} />
+
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route
+          path="/admin"
+          element={
+            <AdminGuard>
+              <AdminDashboard />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/schedule"
+          element={
+            <AdminGuard>
+              <AdminSchedule />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/schedule/:sessionId"
+          element={
+            <AdminGuard>
+              <AdminSessionDetail />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/students"
+          element={
+            <AdminGuard>
+              <AdminStudents />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/invoices"
+          element={
+            <AdminGuard>
+              <AdminInvoices />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/invoices/:invoiceId/pay"
+          element={
+            <AdminGuard>
+              <AdminRecordPayment />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/waivers"
+          element={
+            <AdminGuard>
+              <AdminWaivers />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <AdminGuard>
+              <AdminSettings />
+            </AdminGuard>
+          }
+        />
+      </Routes>
+    </Shell>
+  );
+}

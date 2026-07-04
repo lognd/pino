@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Title/description fall back to the same defaults as lib/brand.ts
+         (see docs/design/00-overview.md's business-identity rule) -- this
+         file cannot import TypeScript, so the fallback string is
+         duplicated here ONLY as a literal fallback for pre-JS crawlers;
+         brand.ts and AppConfig remain the two real homes of the name. -->
+    <title>Mel Pino</title>
+    <meta
+      name="description"
+      content="SAMPLE -- Mel Pino: firearms law, concealed-carry certification, and shooting technique instruction in Clearwater, Florida."
+    />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://example.com/" />
+    <!-- Route-specific title/description/canonical/OG/Twitter overrides are
+         applied client-side per page (see src/app/layout/PageMeta.tsx).
+         Real prerendering per docs/design/07 lands later; these are the
+         defaults a non-JS-executing scraper falls back to until then. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Mel Pino" />
+    <meta property="og:title" content="Mel Pino" />
+    <meta
+      property="og:description"
+      content="SAMPLE -- Mel Pino: firearms law, concealed-carry certification, and shooting technique instruction in Clearwater, Florida."
+    />
+    <meta property="og:url" content="https://example.com/" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Mel Pino" />
+    <meta
+      name="twitter:description"
+      content="SAMPLE -- Mel Pino: firearms law, concealed-carry certification, and shooting technique instruction in Clearwater, Florida."
+    />
+    <!-- Barlow Condensed (display) / Barlow (body), self-hosted via
+         @fontsource -- see docs/design/09-design-system.md and
+         src/styles/tokens.css's own font-face import note. No Google
+         Fonts CDN at runtime. -->
+    <style>
+      /* Dark background painted BEFORE any CSS/JS loads, so a slow
+         connection never flashes white against this brand's black-ground
+         identity (doc 09: "black ground... this is not a mood"). Matches
+         --mp-black from tokens.css; duplicated here as a literal because
+         this inline style must work before tokens.css is parsed. */
+      html,
+      body {
+        background-color: #0a0a0b;
+      }
+    </style>
+  </head>
+  <body class="bg-mp-black text-mp-white font-body">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

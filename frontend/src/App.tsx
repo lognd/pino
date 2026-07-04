@@ -14,7 +14,7 @@ import { Contact } from "./app/routes/public/Contact";
 import { Book } from "./app/routes/public/Book";
 import { ManageBooking } from "./app/routes/public/ManageBooking";
 import { Pay } from "./app/routes/public/Pay";
-import { Legal } from "./app/routes/public/Legal";
+import { LegalPage } from "./app/routes/public/LegalPage";
 import { AdminLogin } from "./app/routes/admin/Login";
 import { AdminDashboard } from "./app/routes/admin/Dashboard";
 import { AdminSchedule } from "./app/routes/admin/Schedule";
@@ -37,7 +37,26 @@ export function App() {
         <Route path="/book" element={<Book />} />
         <Route path="/booking/:token" element={<ManageBooking />} />
         <Route path="/pay/:token" element={<Pay />} />
-        <Route path="/legal/:page" element={<Legal />} />
+        <Route path="/legal/privacy" element={<LegalPage />} />
+        <Route path="/legal/terms" element={<LegalPage />} />
+        <Route path="/legal/disclaimers" element={<LegalPage />} />
+        <Route path="/legal/:page" element={<LegalPage />} />
+
+        {/* DEV-ONLY hero lab route. TODO(hero-agent): src/hero/HeroLab.tsx
+            does not exist yet as of this change -- uncomment once it
+            lands. Kept dev-gated via import.meta.env.DEV so it never ships
+            in a production route table, and lazy so it never enters the
+            production bundle either. */}
+        {/* {import.meta.env.DEV && (
+          <Route
+            path="/hero-lab"
+            element={
+              <Suspense fallback={null}>
+                <HeroLab />
+              </Suspense>
+            }
+          />
+        )} */}
 
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route

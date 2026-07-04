@@ -5,4 +5,7 @@ Disallow: /admin/
 Disallow: /booking/
 Disallow: /pay/
 
+# TODO(seo): sitemap.xml itself is generated at build time from the known
+# public route list (docs/design/10-seo-and-content.md section 3) -- not
+# built yet; this Sitemap line points at where it will live.
 Sitemap: https://example.com/sitemap.xml

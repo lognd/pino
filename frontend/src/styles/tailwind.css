@@ -26,3 +26,20 @@ body {
 body {
   background-color: var(--mp-black);
 }
+
+/* Focus visible: 3px red outline + 2px offset on every focusable element --
+   doc 09's elderly-first contract. Applies globally instead of per
+   component so no new interactive element can silently ship without it. */
+:focus-visible {
+  outline: 3px solid var(--mp-red);
+  outline-offset: 2px;
+}
+
+/* Diagonal section-divider utility -- doc 09's --mp-skew angle, the same
+   slant everywhere (section dividers, the red CTA band). Apply to a
+   block-level section; the clip-path leans the same way as the wordmark's
+   italic. */
+.mp-diagonal-divider {
+  clip-path: polygon(0 4%, 100% 0, 100% 96%, 0 100%);
+}
+

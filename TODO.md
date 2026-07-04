@@ -91,6 +91,10 @@ implementing; docs win over guesses.
 - [ ] Manual payment recording endpoint (admin)
 - [ ] melpinoinvoice.cls letterhead w/ business_legal_name
 - [ ] Payment idempotency/tamper/race tests copied + green
+- [ ] Revisit api/bookings.py + api/courses.py module-level AppConfig
+      singleton (blocks per-test config injection; system tests
+      monkeypatch module _cfg -- flagged during P3; prefer app.state
+      or a Depends provider)
 - [ ] Fix AppConfig.payment_processor_secret default ("sk_test_fake"
       makes /api/config report stripe:true when nothing is
       configured -- flagged during P2; decide None-means-unconfigured

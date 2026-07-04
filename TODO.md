@@ -15,15 +15,16 @@ implementing; docs win over guesses.
 ## P0 -- Scaffold (DONE when `make check` passes on stubs)
 
 - [x] Repo bootstrap: git, remote (github.com/lognd/pino), MIT, docs set
-- [ ] backend/ scaffold per docs/design/01 (stubs, pyproject, Makefile,
+- [x] backend/ scaffold per docs/design/01 (stubs, pyproject, Makefile,
       Dockerfile, alembic skeleton, env example, test skeletons)
-- [ ] frontend/ scaffold per docs/design/07 (configs, route stubs,
+- [x] frontend/ scaffold per docs/design/07 (configs, route stubs,
       hero/ module stubs, tokens.css, brand.ts, content/mock.ts,
       mocks/, test skeletons)
-- [ ] root: Makefile, compose x3, Caddyfile, CI + deploy workflows,
+- [x] root: Makefile, compose x3, Caddyfile, CI + deploy workflows,
       ops/ stubs, docs/README.md + docs/secrets.md + docs/deployment.md
-- [ ] `make check` green (lint + typecheck; test suites all-skip)
-- [ ] README.md links updated; first push to origin
+- [x] `make check` green per subproject (backend ruff/ty pass,
+      frontend typecheck/lint pass; test suites all-skip by design)
+- [x] README.md links updated; first push to origin
 
 ## P1 -- Landing page + hero prototype (docs/design/08, 09, 10)
 

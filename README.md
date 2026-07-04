@@ -27,12 +27,15 @@ how the frontend looks obviously.)
 
 ## Status
 
-Early scaffold. The **public landing page is the first real deliverable**;
-the admin/business app is a **mockup** for now -- we're still discovering
-what functionality Mel actually needs (see Open questions). Nothing below
-is built yet; this file is the target shape, mirrored from `logand.app`.
+Scaffolded: design docs ([docs/design/](docs/design/README.md)), stub
+trees for `backend/` and `frontend/`, compose/CI/ops -- all interfaces
+specified, no feature implementation yet. Build order and the live
+checklist are in [TODO.md](TODO.md). The **public landing page is the
+first real deliverable**; the admin/business app is a **mockup** for
+now -- we're still discovering what functionality Mel actually needs
+(see Open questions and [docs/design/14-admin-mockup.md](docs/design/14-admin-mockup.md)).
 
-## Layout (target)
+## Layout
 
 ```
 backend/      Python / FastAPI / pydantic / typani -- API, auth, business logic

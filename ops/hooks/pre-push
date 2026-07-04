@@ -1,0 +1,23 @@
+#!/bin/sh
+# Cribbed from logand.app's ops/hooks/pre-push, which uploads new/changed
+# frontend/public/local-media/ files to R2 before every push. melpino has
+# no documented equivalent yet (no design doc currently specifies a
+# frontend-public-media-to-R2 sync -- see docs/design/13-storage-abstraction.md
+# for the storage backend melpino DOES have, which is app-managed uploads,
+# not static frontend assets). Kept as a guarded no-op until/unless
+# ops/sync_public_media.py is actually written for a real melpino need
+# (e.g. hero video assets, see docs/design/08-landing-hero.md's swap
+# contract) -- do not remove this guard, it is what makes this hook safe
+# to enable today with `git config core.hooksPath ops/hooks` without
+# breaking every push on a script that doesn't exist yet.
+set -eu
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+SYNC_SCRIPT="${REPO_ROOT}/ops/sync_public_media.py"
+
+if [ ! -f "${SYNC_SCRIPT}" ]; then
+    echo "pre-push: ${SYNC_SCRIPT} does not exist yet, skipping media sync"
+    exit 0
+fi
+
+uv run --project "${REPO_ROOT}/backend" python "${SYNC_SCRIPT}"

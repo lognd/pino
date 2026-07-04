@@ -1,0 +1,22 @@
+# Domain is undecided as of this writing (see docs/design/00-overview.md's
+# "Business identity" section and the root README's open questions) --
+# SITE_DOMAIN env-substitution keeps this file from hardcoding a guess.
+# Set SITE_DOMAIN on the VPS once the real domain lands; until then this
+# falls back to the placeholder below, which will not get a real
+# Let's Encrypt certificate.
+{$SITE_DOMAIN:example.com} {
+	encode gzip
+
+	handle /api/* {
+		request_body {
+			max_size 25MB
+		}
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		root * /srv/frontend
+		try_files {path} /index.html
+		file_server
+	}
+}

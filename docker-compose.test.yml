@@ -1,0 +1,62 @@
+# Used by CI's combined system-test job (.github/workflows/ci.yml) and by anyone
+# running the full stack locally for backend/frontend system tests.
+# See docs/design/12-testing-strategy.md.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: melpino_test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: melpino_test
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U melpino_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+
+  # A local HTTP double for the slice of Stripe's real API this backend
+  # calls (see testing/fake_stripe.py's own doc comment) -- lets the full
+  # stack's booking/invoice-payment system tests exercise a REAL HTTP
+  # round trip through the real stripe-python SDK without a real Stripe
+  # test-mode account/API key. Not used by backend/tests/system's own
+  # pytest suite (those tests spin up their own copy in-process), only by
+  # anything driving this compose stack directly (frontend Playwright
+  # system tests, local manual runs).
+  fake-stripe:
+    build:
+      context: ./backend
+    command: ["python", "-m", "melpino_backend.testing.fake_stripe"]
+    ports:
+      - "12111:12111"
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://melpino_test:test@postgres:5432/melpino_test
+      REDIS_URL: redis://redis:6379/0
+      SESSION_SECRET: test-secret-not-for-production
+      PAYMENT_PROCESSOR_SECRET: sk_test_fake
+      STRIPE_WEBHOOK_SECRET: whsec_fake
+      STRIPE_API_BASE: http://fake-stripe:12111
+      # Guarantees a known admin account exists before any system test
+      # runs, without a separate seeding step in CI that could be
+      # forgotten -- see app/app.py's _seed_admin_if_configured. Frontend
+      # Playwright system tests read these same two values back out of
+      # the environment to log in as this account.
+      SEED_ADMIN_EMAIL: admin-fixture@example.com
+      SEED_ADMIN_PASSWORD: admin-fixture-password-not-for-production
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      fake-stripe:
+        condition: service_started

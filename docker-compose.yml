@@ -1,0 +1,147 @@
+# Production topology -- single VPS, see docs/design/11-deployment.md.
+# NOTE(melpino): caddy serves the prerendered frontend/dist directly (see
+# docs/design/10-seo-and-content.md) -- there is no separate frontend
+# container in prod, only a build artifact mounted into caddy.
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend/dist:/srv/frontend:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+  backend:
+    # Both fields intentional: `build` lets a dev build+run locally with
+    # no registry involved; `image` is what makes `docker compose pull`
+    # (deploy.yml's actual VPS-side deploy step) fetch the exact image
+    # ci.yml's build-and-push job just pushed, instead of silently
+    # having nothing to pull.
+    image: ghcr.io/lognd/pino/backend:latest
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    volumes:
+      # STORAGE_BACKEND=local (the default -- see backend/.env.example)
+      # writes here; without a real named volume this is just container-
+      # ephemeral storage, silently losing every uploaded waiver/media
+      # file on the next redeploy or container restart. Mounted at
+      # STORAGE_LOCAL_DIR's default value (./data/storage, relative to
+      # the image's WORKDIR /app -- see backend/Dockerfile). A deployment
+      # using STORAGE_BACKEND=r2 instead doesn't need this volume for
+      # correctness (R2 is the real persistence), but it's harmless to
+      # leave mounted either way.
+      - storage_data:/app/data/storage
+      # Shared with the scheduler service below -- both processes' logs
+      # land in one place (logging/logger.py's LOG_DIR, default ./logs
+      # relative to the image's WORKDIR /app) so an admin retrieving logs
+      # via /api/admin/logs sees the scheduler's activity too, not just
+      # the API server's own. See docs/design/11-deployment.md.
+      - app_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  migrate:
+    build:
+      context: ./backend
+    # No "uv run" prefix -- the final Dockerfile stage doesn't have uv
+    # installed (only the discarded build stage does); PATH already
+    # points at /app/.venv/bin, where alembic lives directly.
+    command: ["alembic", "upgrade", "head"]
+    env_file:
+      - ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["migrate"]   # run explicitly: docker compose --profile migrate run migrate
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: melpino
+      POSTGRES_DB: melpino
+      # POSTGRES_PASSWORD is read from backend/.env via env_file below -- NOT inlined here.
+    env_file:
+      - ./backend/.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U melpino"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  # Reminder-sweep loop -- see docs/design/04-booking-and-scheduling.md and
+  # scripts/scheduler.py's own doc comment. Reuses the SAME built backend
+  # image (same code/deps, no separate Dockerfile to keep in sync), just
+  # with a different command -- a long-running sleep-until-next-run loop
+  # instead of uvicorn, so it never needs system cron (which would need
+  # this image's non-root appuser to somehow gain crontab-management
+  # privileges it deliberately doesn't have).
+  scheduler:
+    # Same dual build/image fields as the backend service above, for the
+    # same reason: `image:` is what makes `docker compose pull` (deploy.yml)
+    # fetch the exact image ci.yml's build-and-push job already built,
+    # instead of `docker compose up` silently falling back to a full
+    # from-source rebuild on the VPS itself every deploy.
+    image: ghcr.io/lognd/pino/backend:latest
+    build:
+      context: ./backend
+    # No "uv run" prefix -- same reason as the migrate service's own
+    # comment above: the final Dockerfile stage has no uv installed (only
+    # the discarded build stage does), PATH already points at
+    # /app/.venv/bin directly. This was the actual cause of "exec: uv:
+    # executable file not found in $PATH" the one time this container
+    # tried to start on logand.app.
+    command: ["python", "-m", "melpino_backend.scripts.scheduler"]
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    volumes:
+      - app_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backup:
+    build:
+      context: ./ops
+      dockerfile: backup.Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data:ro
+      # Same volume the backend writes STORAGE_BACKEND=local files to --
+      # see backend service's own doc comment above. Waivers are legal
+      # documents (see docs/design/06-waivers-and-legal.md) -- this is
+      # the offsite copy of them, not just a convenience backup.
+      - storage_data:/evidence:ro
+      - backup_staging:/backup
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+  storage_data:
+  backup_staging:
+  app_logs:

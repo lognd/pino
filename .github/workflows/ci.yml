@@ -1,0 +1,176 @@
+name: CI
+
+on:
+  pull_request: {}
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    # Official uv image bundles Python 3.12 + uv already installed and on
+    # PATH -- skips astral-sh/setup-uv's own download-and-install step
+    # entirely. bookworm-slim matches backend/Dockerfile's own
+    # python:3.12-slim base.
+    container: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    # Pinned inside the workspace (not uv's default ~/.cache/uv) so
+    # actions/cache below has a stable, checkout-relative path to key on --
+    # the container's own $HOME can vary run to run in ways actions/cache
+    # can't reliably address. Applies to every step in this job, not just
+    # `install`, since `check` also invokes uv.
+    env:
+      UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: .uv-cache
+          key: ${{ runner.os }}-uv-${{ hashFiles('backend/uv.lock') }}
+      - name: install
+        working-directory: backend
+        run: uv sync
+      - name: check
+        working-directory: backend
+        # NOTE(melpino): `frob check` (part of `make check`) needs frob
+        # installed; CI installs it via uv's dev dependency group once
+        # frob is added to backend/pyproject.toml's dev group.
+        run: uv run ruff check src/ tests/ && uv run ruff format --check src/ tests/ && uv run ty check src/ && uv run pytest tests/unit tests/integration -n auto
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: install
+        working-directory: frontend
+        run: npm ci
+      - name: check
+        working-directory: frontend
+        run: npm run lint && npm run typecheck && npm run test
+
+  # See docs/design/12-testing-strategy.md's "Repo-policy checks" section --
+  # these are cheap greps, not full test suites, but a real CI gate all the
+  # same (a docs-only or docs+code PR still runs and can still fail this).
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ASCII-only
+        run: |
+          if git grep -IlP '[^\x00-\x7F]' -- . \
+              ':!docs/design/**' \
+              | grep -q .; then
+            echo "non-ASCII characters found in tracked files (see docs/design/00-overview.md):"
+            git grep -IlP '[^\x00-\x7F]' -- . ':!docs/design/**'
+            exit 1
+          fi
+          # docs/design/ itself must ALSO be ASCII-only (00-overview.md's
+          # rule has no carve-out for design docs) -- checked separately
+          # so a failure here prints a clearer message than lumping it
+          # into the pathspec exclusion above.
+          if git grep -IlP '[^\x00-\x7F]' -- docs/design/ | grep -q .; then
+            echo "non-ASCII characters found under docs/design/:"
+            git grep -IlP '[^\x00-\x7F]' -- docs/design/
+            exit 1
+          fi
+      - name: no hardcoded business name outside sanctioned files
+        # Sanctioned: backend config (business_legal_name/business_short_name
+        # live in AppConfig, not hardcoded), frontend/src/lib/brand.ts, all
+        # of docs/, and the wordmark asset itself (see
+        # docs/design/00-overview.md's "Business identity" section).
+        run: |
+          if git grep -Il "Mel Pino" -- . \
+              ':!docs/**' \
+              ':!frontend/src/lib/brand.ts' \
+              ':!*.svg' \
+              | grep -q .; then
+            echo "hardcoded business name found outside sanctioned files:"
+            git grep -Il "Mel Pino" -- . ':!docs/**' ':!frontend/src/lib/brand.ts' ':!*.svg'
+            exit 1
+          fi
+      - name: no hardcoded real domain outside Caddyfile
+        # SITE_DOMAIN is undecided (see docs/design/00-overview.md) -- once
+        # a real domain lands, it must only ever appear in Caddyfile's env
+        # default and docs/, never hardcoded into application code.
+        run: |
+          if git grep -Il "melpino\.com\|melpinotraining\.com" -- . \
+              ':!Caddyfile' ':!docs/**' \
+              | grep -q .; then
+            echo "hardcoded domain found outside Caddyfile:"
+            git grep -Il "melpino\.com\|melpinotraining\.com" -- . ':!Caddyfile' ':!docs/**'
+            exit 1
+          fi
+
+  system-tests:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend, policy]
+    steps:
+      - uses: actions/checkout@v4
+      - name: bring up test stack
+        run: docker compose -f docker-compose.test.yml up -d --build
+      - name: wait for backend
+        # NOTE(melpino): replace with a real healthcheck-based wait once
+        # api/health.py exists; a sleep is a placeholder, not a pattern to
+        # keep -- see logand.app's own ci.yml for the same note.
+        run: sleep 10
+      - uses: astral-sh/setup-uv@v3
+        with:
+          # Caches uv's own download/build cache (~/.cache/uv) keyed on
+          # backend/uv.lock -- without this, every system-tests run
+          # re-resolves and re-downloads the exact same wheels the
+          # `backend` job (running in parallel, on a separate runner)
+          # just did, since GitHub-hosted runners are fresh VMs with
+          # nothing persisted between jobs or runs on their own.
+          enable-cache: true
+      - name: backend system tests
+        working-directory: backend
+        run: uv sync && uv run pytest tests/system -n auto
+        env:
+          API_BASE_URL: http://localhost:8000
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: install frontend deps
+        working-directory: frontend
+        # Deps only -- the actual test run happens inside the official
+        # Playwright image below (browsers + their OS-level deps already
+        # baked in), but node_modules itself still needs to exist on disk
+        # first so that image can see it via the bind mount.
+        run: npm ci
+      - name: frontend system tests
+        working-directory: frontend
+        # --network host lets this container reach docker-compose.test.yml's
+        # exposed ports (backend on localhost:8000) exactly like a
+        # non-containerized process would, and lets its own dev server
+        # (Playwright's webServer config spawns `npm run dev` as its
+        # child) be reachable the same way in return.
+        #
+        # IMPORTANT: this image tag MUST match @playwright/test's exact
+        # resolved version in frontend/package-lock.json -- the npm
+        # package and the browsers baked into this image are versioned
+        # together, and a mismatch fails with "browserType.launch:
+        # Executable doesn't exist." frontend/package.json did not exist
+        # yet when this workflow was authored, so this pins the same
+        # version logand.app pins (v1.61.1) as a starting point -- update
+        # this tag the moment frontend/package.json pins a different
+        # @playwright/test version, and keep them in lockstep from then on.
+        run: |
+          docker run --rm --network host \
+            -v "$PWD:/work" -w /work \
+            -e CI=true \
+            -e SEED_ADMIN_EMAIL \
+            -e SEED_ADMIN_PASSWORD \
+            mcr.microsoft.com/playwright:v1.61.1-jammy \
+            npm run test:system
+        env:
+          SEED_ADMIN_EMAIL: admin-fixture@example.com
+          SEED_ADMIN_PASSWORD: admin-fixture-password-not-for-production
+      - name: tear down
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v

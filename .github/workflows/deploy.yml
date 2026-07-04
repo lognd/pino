@@ -1,0 +1,164 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+# NOTE(melpino): ci.yml ALSO triggers on `push: branches: [main]` -- both
+# workflows start in parallel on the same push, they are not sequential.
+# wait-for-ci below is what actually gates the deploy on ci.yml's result
+# for this exact SHA (via polling, since there's no clean "depends on a
+# different workflow's run" primitive short of workflow_run, which has its
+# own subtleties around re-resolving the right SHA). Carried verbatim from
+# logand.app's deploy.yml -- do not reintroduce a workflow_run-triggered
+# misunderstanding here either.
+jobs:
+  wait-for-ci:
+    runs-on: ubuntu-latest
+    # NOTE: the default GITHUB_TOKEN's permissions are read-only for most
+    # resources UNLESS the repo/org's default workflow permissions setting
+    # is "read and write," and even then, "checks: read" isn't implied by
+    # the broad defaults on every account -- without this explicit block,
+    # `gh api .../check-runs` below can 403 ("Resource not accessible by
+    # integration"), which an earlier version of this pattern silently
+    # swallowed into an EMPTY results file rather than a build failure --
+    # meaning a permissions problem here didn't loudly fail closed, it
+    # just meant `checks` came back empty and the gate below had nothing
+    # real to check.
+    permissions:
+      checks: read
+      contents: read
+    steps:
+      - name: poll CI status for this SHA
+        # A single immediate check (no polling) sees ci.yml's jobs still
+        # "in_progress" (no conclusion yet) far more often than not, since
+        # ci.yml (four jobs) takes several minutes and starts at the same
+        # moment this workflow does -- poll in a real loop instead, waiting
+        # for every relevant check run to reach a terminal conclusion (not
+        # just "exists"), with a generous but finite timeout so a
+        # genuinely stuck CI run fails the deploy rather than hanging
+        # forever.
+        run: |
+          # Includes system-tests -- a deploy must not go out if the full
+          # end-to-end system-test job failed, even if the three faster
+          # jobs it depends on passed.
+          names_pattern='^(backend|frontend|policy|system-tests)'
+          elapsed=0
+          timeout=1800   # 30 minutes -- ci.yml's slowest job today is well under this
+          interval=20
+
+          while true; do
+            if ! gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
+                 --jq '.check_runs[] | select(.name | test("'"$names_pattern"'")) | .name + " " + .status + " " + (.conclusion // "null")' \
+                 > /tmp/check_runs.txt; then
+              echo "gh api call failed (see error above -- check the checks:read permission" \
+                   "on this job, or GITHUB_TOKEN's repo access) -- aborting deploy"
+              exit 1
+            fi
+
+            echo "--- check-runs for $GITHUB_SHA at ${elapsed}s ---"
+            cat /tmp/check_runs.txt
+
+            relevant_count=$(wc -l < /tmp/check_runs.txt)
+            pending_count=$(awk '$2 != "completed"' /tmp/check_runs.txt | wc -l)
+
+            if [ "$relevant_count" -gt 0 ] && [ "$pending_count" -eq 0 ]; then
+              break  # every relevant check run has completed -- fall through to the verdict below
+            fi
+
+            if [ "$elapsed" -ge "$timeout" ]; then
+              echo "Timed out after ${timeout}s waiting for CI to finish on this SHA -- aborting deploy"
+              exit 1
+            fi
+
+            sleep "$interval"
+            elapsed=$((elapsed + interval))
+          done
+
+          if awk '{print $3}' /tmp/check_runs.txt | grep -qv '^success$'; then
+            echo "CI did not pass cleanly for this SHA, aborting deploy"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: wait-for-ci
+    # Without this, GITHUB_TOKEN inherits the repo/org's default
+    # permissions -- read-only by default on newer accounts -- and
+    # docker/build-push-action's push to ghcr.io fails with "denied:
+    # installation not allowed to Create organization package" even
+    # though the login step itself succeeds (login only needs read
+    # access; the push is what actually needs write).
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ghcr.io/${{ github.repository }}/backend:${{ github.sha }},ghcr.io/${{ github.repository }}/backend:latest
+          # Baked into the image so /api/admin/version can report exactly
+          # what commit is actually deployed -- see Dockerfile's own
+          # comment on this ARG and api/admin_version.py.
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+      - name: build frontend static assets
+        working-directory: frontend
+        run: npm ci && npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend-dist
+      - name: rsync frontend build to VPS
+        # NOTE(melpino): requires VPS_HOST, VPS_USER, VPS_SSH_KEY secrets
+        # set in repo settings. Never echo or log these -- see
+        # docs/design/00-overview.md and docs/design/11-deployment.md.
+        # VPS_USER should be the non-root 'melpino' service account (see
+        # ops/setup-vps.sh) -- not root -- and its home is where the repo
+        # actually lives (/home/melpino/pino), not /srv.
+        uses: easingthemes/ssh-deploy@v6
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_KEY }}
+          REMOTE_HOST: ${{ secrets.VPS_HOST }}
+          REMOTE_USER: ${{ secrets.VPS_USER }}
+          SOURCE: "frontend-dist/"
+          TARGET: "/home/melpino/pino/frontend/dist"
+      - name: pull + restart backend on VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /home/melpino/pino
+            # Without this, docker-compose.yml/Caddyfile/Dockerfile changes
+            # on this exact SHA never reach the VPS at all -- only image
+            # PULLS happen below, and those are built from whatever the
+            # VPS's own checked-out docker-compose.yml/Dockerfiles say to
+            # build, not from what was actually just merged to main.
+            # git reset --hard (not just pull) since this working tree
+            # should never have local changes of its own to preserve -- it
+            # exists only to mirror main exactly.
+            git fetch origin main
+            git reset --hard origin/main
+            docker compose pull backend scheduler
+            docker compose --profile migrate run --rm migrate
+            docker compose up -d backend caddy scheduler

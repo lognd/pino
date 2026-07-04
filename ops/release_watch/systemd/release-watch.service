@@ -1,0 +1,15 @@
+[Unit]
+Description=Polls GitHub for new pino releases and redeploys
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/home/melpino/pino/backend/.env
+WorkingDirectory=/home/melpino/pino/ops/release_watch
+ExecStart=/usr/local/bin/uv run release-watch watch
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

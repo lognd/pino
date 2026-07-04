@@ -26,7 +26,7 @@ export function LegalPage() {
         <h1 className="font-display text-4xl font-extrabold italic uppercase text-mp-white">
           We could not find that page
         </h1>
-        <Link to="/" className="mt-6 inline-block text-lg font-semibold text-mp-red underline">
+        <Link to="/" className="mt-6 inline-block text-lg font-semibold text-mp-red-text underline">
           Go back home
         </Link>
       </main>
@@ -38,7 +38,7 @@ export function LegalPage() {
       <h1 className="font-display text-4xl font-extrabold italic uppercase text-mp-white">
         {entry.title}
       </h1>
-      <p className="mt-4 max-w-[70ch] border-2 border-mp-red px-4 py-3 text-lg font-semibold uppercase text-mp-red">
+      <p className="mt-4 max-w-[70ch] border-2 border-mp-red-text px-4 py-3 text-lg font-semibold uppercase text-mp-red-text">
         {entry.sampleNotice}
       </p>
       <div className="mt-8 flex max-w-[70ch] flex-col gap-8">

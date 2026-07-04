@@ -44,9 +44,6 @@ export function App() {
         <Route path="/book" element={<Book />} />
         <Route path="/booking/:token" element={<ManageBooking />} />
         <Route path="/pay/:token" element={<Pay />} />
-        <Route path="/legal/privacy" element={<LegalPage />} />
-        <Route path="/legal/terms" element={<LegalPage />} />
-        <Route path="/legal/disclaimers" element={<LegalPage />} />
         <Route path="/legal/:page" element={<LegalPage />} />
 
         {import.meta.env.DEV && (

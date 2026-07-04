@@ -6,18 +6,13 @@ import { PUBLIC_ROUTES } from "./routes.manifest";
 // zero critical/serious -- the elderly-first gate (09)." Runs against
 // every route in the public manifest (tests/system/routes.manifest.ts,
 // mirrors src/lib/routes.ts).
-// KNOWN, REPORTED axe finding (P1 system-test verification pass, 2026-07-04):
-// every public page has at least one "color-contrast" SERIOUS violation --
-// --mp-red (#E8112D) text on --mp-surface (#161618), e.g. the "Learn more
-// about SAMPLE -- ..." course-card links (contrast 3.91:1, needs 4.5:1 per
-// docs/design/09-design-system.md's AA gate). This is a real, systemic
-// design-system bug (the red/surface pairing itself, not a per-page
-// mistake) -- NOT weakened here. The assertion below still runs axe for
-// real and only swallows a failure if it is EXACTLY this known, reported
-// issue; any other or additional serious/critical violation still fails
-// the test for real. Remove this allowance once the color pairing (or the
-// component using it) is fixed to hit 4.5:1.
-const KNOWN_REPORTED_VIOLATION_IDS = new Set(["color-contrast"]);
+//
+// The color-contrast violation previously tracked here (--mp-red text on
+// --mp-surface measuring 3.91:1, below the 4.5:1 AA gate) is fixed: body-size
+// red text/links now use the new --mp-red-text token (src/styles/tokens.css),
+// which measures >= 4.5:1 on both --mp-surface and --mp-black (see that
+// file's comment for the computed ratios). No allowlist remains -- any
+// serious/critical violation now fails the test for real.
 
 for (const route of PUBLIC_ROUTES) {
   test.describe(`Accessibility (axe): ${route.path}`, () => {
@@ -38,15 +33,6 @@ for (const route of PUBLIC_ROUTES) {
           })
           .join("\n");
         console.error(`axe violations on ${route.path}:\n${report}`);
-
-        const onlyKnown = seriousOrCritical.every((v) =>
-          KNOWN_REPORTED_VIOLATION_IDS.has(v.id),
-        );
-        test.fixme(
-          onlyKnown,
-          `Real axe SERIOUS violation(s), already reported to the pages agent -- ` +
-            `see KNOWN_REPORTED_VIOLATION_IDS above:\n${report}`,
-        );
 
         expect(
           seriousOrCritical,

@@ -28,7 +28,7 @@ export function CourseDetail() {
         <p className="mt-4 max-w-[70ch] text-lg text-mp-white">
           SAMPLE -- That class link may be out of date. Take a look at our full class list.
         </p>
-        <Link to="/courses" className="mt-6 inline-block text-lg font-semibold text-mp-red underline">
+        <Link to="/courses" className="mt-6 inline-block text-lg font-semibold text-mp-red-text underline">
           See all courses
         </Link>
       </main>

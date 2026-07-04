@@ -18,7 +18,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
     return <Navigate to="/admin/login" replace />;
   }
   if (isError || !data) {
-    return <p className="p-4 text-lg text-mp-red">Something went wrong. Please try again.</p>;
+    return <p className="p-4 text-lg text-mp-red-text">Something went wrong. Please try again.</p>;
   }
 
   return <>{children}</>;

@@ -25,41 +25,17 @@ test.describe("Landing page", () => {
     expect(html).toContain("SAMPLE -- Private 1:1 Lesson");
   });
 
-  // KNOWN, REPORTED bug (P1 system-test verification pass, 2026-07-04):
-  // client-side navigation is completely inert on every route. Root
-  // cause: src/main.tsx calls installGlobalLogging() before the first
-  // React render, and every function in src/lib/logging.ts
-  // (installGlobalLogging included) is a stub that unconditionally
-  // throws `Error("TODO(impl): docs/design/07-frontend-architecture.md")`
-  // -- so ReactDOM.createRoot(...).render(...) never runs on ANY page.
-  // Every <a> tag in the prerendered markup is therefore a plain,
-  // un-intercepted anchor: clicking one does a full browser navigation
-  // using its literal href.
-  //
-  // That alone would still land on the right page (full navigation to
-  // e.g. /courses), except a second, compounding issue means it doesn't:
-  // `vite preview`'s static server only resolves a directory's
-  // dist/<path>/index.html when the URL ends in "/" (see seo.spec.ts's
-  // fetchPath() comment) -- these hrefs are authored without a trailing
-  // slash (matching scripts/prerender.mjs's slash-less canonical/sitemap
-  // URLs), so the request falls through to the SPA fallback and serves
-  // dist/index.html (Landing) instead, regardless of destination.
-  //
-  // Both causes are outside this test suite's ownership (src/lib/logging.ts
-  // and vite.config.ts's preview server behavior are not
-  // frontend/tests/system/** or playwright-config files) -- NOT weakened
-  // here. The assertions below check real destination content and are
-  // expected to fail until logging.ts lands; test.fixme keeps the real
-  // bar encoded rather than a vacuous one.
+  // Previously KNOWN, REPORTED bug (P1 system-test verification pass,
+  // 2026-07-04): src/lib/logging.ts's stubs unconditionally threw, so
+  // installGlobalLogging() in main.tsx (called before the first React
+  // render) took down hydration on every page, leaving every <a> as a
+  // plain un-intercepted anchor. Fixed: logging.ts is now fully
+  // implemented (ring buffer + console output + window error/rejection
+  // capture, no throwing paths), so React mounts and client-side
+  // navigation works again.
   test("nav links (Courses/About/Contact/legal footer) are all reachable with a real H1", async ({
     page,
   }) => {
-    test.fixme(
-      true,
-      "src/lib/logging.ts stubs throw on every page load (installGlobalLogging), " +
-        "so React never mounts and all <a> clicks fall back to native, " +
-        "un-intercepted navigation -- see comment above this test.",
-    );
     await page.goto("/");
 
     const destinations: { link: string; path: string; h1: RegExp }[] = [
@@ -98,12 +74,6 @@ test.describe("Landing page", () => {
   test("Book CTA leads to /book which shows coming-soon copy and a phone fallback", async ({
     page,
   }) => {
-    test.fixme(
-      true,
-      "src/lib/logging.ts stubs throw on every page load (installGlobalLogging), " +
-        "so React never mounts and the Book CTA click falls back to native, " +
-        "un-intercepted navigation -- see comment above the nav-links test.",
-    );
     await page.goto("/");
     await page.getByRole("link", { name: "Book a class", exact: true }).first().click();
     await expect(page).toHaveURL(/\/book$/);

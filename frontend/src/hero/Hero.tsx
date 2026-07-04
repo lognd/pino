@@ -109,9 +109,9 @@ export function Hero() {
     sourceRef.current = null;
     setMode("poster");
     try {
-      // lib/logging.ts is still a stub that throws; wrap until it lands.
-      // TODO(impl): docs/design/07-frontend-architecture.md -- once
-      // logWarn is real, this try/catch can be dropped.
+      // lib/logging.ts's logWarn is now implemented and no longer throws;
+      // this try/catch is defensive-only and can be dropped in a future
+      // cleanup pass (out of scope for the logging-stub fix itself).
       logWarn(
         "hero: dropped to poster after sustained low fps",
         `fps=${scrub.fps.toFixed(1)}`,

@@ -44,7 +44,13 @@ export function Shell({ children }: { children: ReactNode }) {
             <li>
               <Link
                 to={CONTENT.nav.book.path}
-                className="inline-block min-h-[48px] bg-mp-red px-4 py-2 text-lg font-bold uppercase text-mp-white hover:bg-mp-red-press"
+                // text-xl (20px) + font-bold is required, not decorative:
+                // white-on-mp-red only measures 4.19:1 (below the 4.5:1
+                // AA gate for normal-size text), so this pairing is only
+                // compliant at WCAG "large text" size (>= 18.66px bold);
+                // text-lg (18px) fell just short and tripped axe
+                // color-contrast (doc 09's "check every new pairing").
+                className="inline-block min-h-[48px] bg-mp-red px-4 py-2 text-xl font-bold uppercase text-mp-white hover:bg-mp-red-press"
               >
                 {CONTENT.nav.book.label}
               </Link>

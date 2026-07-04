@@ -9,7 +9,7 @@ export function SampleBanner() {
   return (
     <div
       role="status"
-      className="fixed inset-x-0 top-0 z-50 flex h-10 items-center justify-center border-b-2 border-mp-red bg-mp-black-true px-4 text-center font-display text-base font-extrabold uppercase italic tracking-tight text-mp-red"
+      className="fixed inset-x-0 top-0 z-50 flex h-10 items-center justify-center border-b-2 border-mp-red-text bg-mp-black-true px-4 text-center font-display text-base font-extrabold uppercase italic tracking-tight text-mp-red-text"
     >
       MOCKUP -- SAMPLE DATA
     </div>

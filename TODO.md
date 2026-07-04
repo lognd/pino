@@ -45,9 +45,12 @@ implementing; docs win over guesses.
 - [x] Landing page assembly: hero + course cards + credibility strip +
       CTA band (mock content, SAMPLE-marked)
 - [x] Courses/About/Contact/Legal pages from content/mock.ts
-- [ ] Prerender step; JSON-LD; sitemap/robots/llms.txt
-- [ ] Playwright: landing/axe/reduced-motion/SEO obligations (12)
-- [ ] GATE: axe zero critical/serious on all public pages
+- [x] Prerender step; JSON-LD; sitemap/robots/llms.txt
+- [x] Playwright: landing/axe/reduced-motion/SEO obligations (12)
+      (found + fixed: red-on-surface contrast token, hydration broken
+      by throwing logging stub, legal route shadowing)
+- [x] GATE: axe zero critical/serious on all public pages
+      (unconditional assertion, no allowlist)
 
 ## P2 -- Backend skeleton (docs/design/01, 02, 03)
 

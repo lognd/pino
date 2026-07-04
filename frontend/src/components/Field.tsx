@@ -29,7 +29,7 @@ export function Field({ label, errorMessage, id, className, ...rest }: FieldProp
           (className ? ` ${className}` : "")
         }
       />
-      <p id={errorId} role={errorMessage ? "alert" : undefined} className="min-h-[1.6em] text-lg text-mp-red">
+      <p id={errorId} role={errorMessage ? "alert" : undefined} className="min-h-[1.6em] text-lg text-mp-red-text">
         {errorMessage}
       </p>
     </div>

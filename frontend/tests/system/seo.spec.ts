@@ -28,38 +28,20 @@ function fetchPath(routePath: string): string {
   return routePath === "/" ? "/" : `${routePath}/`;
 }
 
-// KNOWN, REPORTED bug (P1 system-test verification pass, 2026-07-04): all
-// three legal routes prerender (and render live) as the app's "not
-// found" fallback instead of real legal content. Root cause: App.tsx
-// registers exact routes `/legal/privacy`, `/legal/terms`,
-// `/legal/disclaimers` (no `:page` param) ahead of the catch-all
-// `/legal/:page`, so react-router matches the FIRST (paramless) route --
-// LegalPage.tsx's `const { page } = useParams<{ page: string }>()` is
-// therefore always undefined on those three routes, `CONTENT.legalPages
-// .find((p) => p.slug === page)` never matches, and the component renders
-// its "We could not find that page" branch. Real legal content (title,
-// description, and the actual policy text) never reaches a user or a
-// crawler on these three routes. src/App.tsx and
-// src/app/routes/public/LegalPage.tsx are out of this test suite's
-// ownership -- NOT weakened here.
-const KNOWN_NOT_FOUND_ROUTES = new Set([
-  "/legal/privacy",
-  "/legal/terms",
-  "/legal/disclaimers",
-]);
-
+// Previously KNOWN, REPORTED bug (P1 system-test verification pass,
+// 2026-07-04): App.tsx registered exact routes `/legal/privacy`,
+// `/legal/terms`, `/legal/disclaimers` (no `:page` param) ahead of the
+// catch-all `/legal/:page`, so react-router matched the FIRST (paramless)
+// route and LegalPage.tsx's `useParams<{ page: string }>().page` was
+// always undefined there, rendering the "not found" fallback instead of
+// real legal content. Fixed: the three exact routes are removed; only the
+// `/legal/:page` catch-all remains, so `page` is always populated.
 for (const route of PUBLIC_ROUTES) {
   test.describe(`SEO metadata: ${route.path}`, () => {
     test(`title, description, canonical present on ${route.path}`, async ({
       request,
       baseURL,
     }) => {
-      if (KNOWN_NOT_FOUND_ROUTES.has(route.path)) {
-        test.fixme(
-          true,
-          `${route.path} prerenders as the not-found fallback -- see KNOWN_NOT_FOUND_ROUTES above.`,
-        );
-      }
       const res = await request.get(fetchPath(route.path));
       expect(res.status()).toBe(200);
       const html = await res.text();
@@ -76,8 +58,8 @@ for (const route of PUBLIC_ROUTES) {
       expect(canonical, "missing canonical link").not.toBeNull();
       expect(canonical![1]).toContain(route.path === "/" ? "/" : route.path);
 
-      // Real content, not the app's not-found fallback (guards the exact
-      // bug documented in KNOWN_NOT_FOUND_ROUTES above).
+      // Real content, not the app's not-found fallback (guards the legal
+      // routing bug fixed in App.tsx -- see comment above this loop).
       expect(html).not.toContain("We could not find that page");
       void baseURL;
     });

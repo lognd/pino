@@ -28,7 +28,7 @@ export function Courses() {
             <p className="mt-2 text-lg font-semibold text-mp-white">{course.priceLabel}</p>
             <Link
               to={`/courses/${course.slug}`}
-              className="mt-4 inline-block text-lg font-semibold text-mp-red underline"
+              className="mt-4 inline-block text-lg font-semibold text-mp-red-text underline"
             >
               Learn more about {course.name}
             </Link>

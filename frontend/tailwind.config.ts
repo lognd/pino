@@ -18,6 +18,7 @@ export default {
           muted: "var(--mp-muted)",
           red: "var(--mp-red)",
           "red-press": "var(--mp-red-press)",
+          "red-text": "var(--mp-red-text)",
           border: "var(--mp-border)",
           success: "var(--mp-success)",
           warn: "var(--mp-warn)",

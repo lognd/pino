@@ -26,7 +26,7 @@ const COLOR: Record<Status, string> = {
   pending: "border-mp-warn text-mp-warn",
   waitlisted: "border-mp-warn text-mp-warn",
   partial: "border-mp-warn text-mp-warn",
-  unpaid: "border-mp-red text-mp-red",
+  unpaid: "border-mp-red-text text-mp-red-text",
 };
 
 export function StatusBadge({ status }: StatusBadgeProps) {

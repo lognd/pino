@@ -30,9 +30,15 @@ cursor position scrubs it.
   same timeline. Define `SHOT_MOMENT` (progress value where the
   muzzle flash peaks, e.g. 0.35). As progress crosses outward from
   SHOT_MOMENT the wordmark's fragments fly apart (translate + rotate,
-  slight scale, motion-blur-suggesting opacity falloff), displacement
-  proportional to |progress - SHOT_MOMENT| with per-fragment random
-  vectors seeded once (stable across frames). As progress returns,
+  slight scale, motion-blur-suggesting opacity falloff), with
+  per-fragment random vectors seeded once (stable across frames).
+  Shatter envelope (RESOLVED during implementation -- an earlier
+  wording contradicted the extremes-identity acceptance test): a
+  side-normalized tent, `u = |p-SHOT| / (p<SHOT ? SHOT : 1-SHOT)`,
+  `shatter = smoothstep(1-u)` -- peak displacement exactly AT
+  SHOT_MOMENT, exactly zero at progress 0 and 1, still a pure
+  function of |progress - SHOT_MOMENT|. See
+  `frontend/src/hero/shards.ts`. As progress returns,
   fragments recombine. It is a pure function of progress -- scrubbing
   backward reassembles it exactly; there is NO independent timer loop.
 

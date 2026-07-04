@@ -18,18 +18,28 @@ import type { ScrubSource } from "../timeline";
 
 export class VideoSource implements ScrubSource {
   async init(_canvas: HTMLCanvasElement): Promise<void> {
-    throw new Error("TODO(impl): docs/design/08-landing-hero.md");
+    // Deliberately unimplemented until Mel's real 240fps clip lands (see
+    // header). Throwing here means Hero.tsx's init try/catch degrades to
+    // the poster if VITE_HERO_SOURCE=video is set before the clip exists.
+    // TODO(impl): docs/design/08-landing-hero.md -- preload muted <video>,
+    // render(p) => currentTime = p * duration, rVFC-synced draw to canvas.
+    throw new Error(
+      "VideoSource not implemented yet (awaiting real 240fps clip) -- " +
+        "docs/design/08-landing-hero.md",
+    );
   }
 
   render(_progress: number): void {
-    throw new Error("TODO(impl): docs/design/08-landing-hero.md");
+    // No-op: never reached because init() rejects before Hero renders a
+    // frame. Present only to satisfy ScrubSource. TODO(impl): as above.
   }
 
   posterUrl(): string {
-    throw new Error("TODO(impl): docs/design/08-landing-hero.md");
+    // Shared poster so the swap-contract degradation path still works.
+    return "/brand/hero-poster.svg";
   }
 
   dispose(): void {
-    throw new Error("TODO(impl): docs/design/08-landing-hero.md");
+    // Nothing allocated yet.
   }
 }

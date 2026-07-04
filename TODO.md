@@ -28,18 +28,23 @@ implementing; docs win over guesses.
 
 ## P1 -- Landing page + hero prototype (docs/design/08, 09, 10)
 
-- [ ] tokens.css + Tailwind theme wired; Barlow/Barlow Condensed via
+- [x] tokens.css + Tailwind theme wired; Barlow/Barlow Condensed via
       @fontsource; base components (BigButton, Field, SampleBanner...)
 - [ ] Wordmark SVG asset: trace/redraw the MEL PINO lockup mockup
       (red MEL / white PINO, heavy condensed italic), pre-split into
       id'd shards (08). HUMAN INPUT: confirm lockup fidelity w/ Logan.
-- [ ] /hero-lab dev route; useScrub state machine (+unit tests)
-- [ ] SimulatedSource (canvas, seeded, pure-in-progress) to budget
-- [ ] Wordmark shatter tied to progress (+purity unit test)
-- [ ] Degradation ladder rungs 1-4 + poster asset
-- [ ] Landing page assembly: hero + course cards + credibility strip +
+      (Placeholder skewed-text lockup + 16 clip-shard triangles are in;
+      swap keeps Wordmark.tsx's shard API.)
+- [x] /hero-lab dev route; useScrub state machine (+unit tests)
+- [x] SimulatedSource (canvas, seeded, pure-in-progress) to budget
+      (gzip chunk size still to be confirmed by a real vite build)
+- [x] Wordmark shatter tied to progress (+purity unit test; envelope
+      rule resolved + recorded in docs/design/08)
+- [x] Degradation ladder rungs 1-4 + poster asset (rung-4 log call
+      TODO until lib/logging.ts is implemented)
+- [x] Landing page assembly: hero + course cards + credibility strip +
       CTA band (mock content, SAMPLE-marked)
-- [ ] Courses/About/Contact/Legal pages from content/mock.ts
+- [x] Courses/About/Contact/Legal pages from content/mock.ts
 - [ ] Prerender step; JSON-LD; sitemap/robots/llms.txt
 - [ ] Playwright: landing/axe/reduced-motion/SEO obligations (12)
 - [ ] GATE: axe zero critical/serious on all public pages

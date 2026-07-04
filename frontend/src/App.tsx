@@ -3,8 +3,15 @@
 //
 // TODO(impl): docs/design/07-frontend-architecture.md
 
+import { Suspense, lazy } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Shell } from "./app/layout/Shell";
+
+// Dev-gated below and lazy, so hero-lab never enters the production
+// bundle or route table -- see docs/design/08-landing-hero.md.
+const HeroLab = lazy(() =>
+  import("./hero/HeroLab").then((m) => ({ default: m.HeroLab })),
+);
 import { AdminGuard } from "./app/layout/AdminGuard";
 import { Landing } from "./app/routes/public/Landing";
 import { Courses } from "./app/routes/public/Courses";
@@ -42,12 +49,7 @@ export function App() {
         <Route path="/legal/disclaimers" element={<LegalPage />} />
         <Route path="/legal/:page" element={<LegalPage />} />
 
-        {/* DEV-ONLY hero lab route. TODO(hero-agent): src/hero/HeroLab.tsx
-            does not exist yet as of this change -- uncomment once it
-            lands. Kept dev-gated via import.meta.env.DEV so it never ships
-            in a production route table, and lazy so it never enters the
-            production bundle either. */}
-        {/* {import.meta.env.DEV && (
+        {import.meta.env.DEV && (
           <Route
             path="/hero-lab"
             element={
@@ -56,7 +58,7 @@ export function App() {
               </Suspense>
             }
           />
-        )} */}
+        )}
 
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route

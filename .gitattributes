@@ -1,0 +1,9 @@
+# Linux-deployed repo: LF everywhere, regardless of checkout platform.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webp binary
+*.mp4 binary
+*.pdf binary
+*.ttf binary
+*.woff2 binary

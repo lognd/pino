@@ -1,0 +1,91 @@
+[project]
+name = "melpino-backend"
+version = "0.1.0"
+description = "Backend for melpino -- public site + guest booking + protected admin tool"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+    "alembic>=1.13",
+    "argon2-cffi>=23.1",
+    "redis>=5.1",
+    "stripe>=11.1",
+    "python-dotenv>=1.0",
+    "python-multipart>=0.0.12",
+    "jinja2>=3.1",
+    "httpx>=0.27",
+    "typani",
+    "boto3>=1.35",
+    # RS256-signs any future service-account JWT Bearer assertion the same
+    # way logand.app's Gmail OAuth2 mailer path does (see
+    # domain/notifications/mailer.py's CRIB pointer) -- kept as a direct
+    # dependency rather than relying on it arriving transitively via
+    # httpx's TLS stack, same reasoning as the logand.app pyproject.toml
+    # comment this is cribbed from.
+    "cryptography>=43",
+]
+
+[project.scripts]
+melpino-backend = "melpino_backend.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/melpino_backend"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-xdist>=3.6",
+    "pytest-cov>=5.0",
+    "ruff>=0.7",
+    "ty>=0.0.1a1",
+    "testcontainers[postgres]>=4.8",
+    "httpx>=0.27",
+    "aiosmtpd>=1.4",
+    "moto[s3]>=5.2.2",
+    "frob",
+]
+
+[tool.coverage.run]
+source = ["src/melpino_backend"]
+# concurrency = ["greenlet"] -- SQLAlchemy's asyncio support bridges to
+# sync DBAPI calls via greenlet_spawn; without telling coverage.py about
+# that, lines executed after an `await db.execute(...)` inside a coroutine
+# are silently reported as NOT covered even when the test genuinely
+# exercised them -- coverage's tracer doesn't follow execution across the
+# greenlet switch used to run that awaited call. Copied verbatim from
+# logand.app/backend/pyproject.toml, which hit this exact false negative.
+concurrency = ["greenlet"]
+# The three testing/fake_*.py doubles exist purely to be driven BY tests
+# (see their own doc comments) -- test infrastructure, not application
+# code, excluded from the coverage target the same way tests/ itself
+# would be. db/migrations is schema plumbing with no branch logic worth
+# covering.
+omit = ["src/melpino_backend/testing/*", "src/melpino_backend/db/migrations/*"]
+
+[tool.coverage.report]
+# latexmk/texlive isn't installed on every machine running the unit/
+# integration suite (see the real Docker image's Dockerfile comment) --
+# excluding this one line is what keeps a missing LaTeX toolchain from
+# silently tanking the coverage percentage on a branch that's otherwise
+# fully covered when the real Docker image (which does have it) runs the
+# same tests. Copied from logand.app's identical pyproject.toml comment.
+exclude_lines = ["pragma: no cover"]

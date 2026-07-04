@@ -37,5 +37,5 @@ export default [
       },
     },
   },
-  { ignores: ["dist/**", "dist-ssr/**", "node_modules/**"] },
+  { ignores: ["dist/**", "dist-ssr/**", "dist-mock/**", "dist-fullstack/**", "node_modules/**"] },
 ];

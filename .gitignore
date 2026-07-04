@@ -47,3 +47,8 @@ data/
 # Claude local session state
 .claude/
 dist-mock/
+dist-fullstack/
+
+# Generated OpenAPI spec (backend/openapi.json) -- produced on demand by
+# `npm run types` (frontend/package.json), never hand-edited or committed.
+backend/openapi.json

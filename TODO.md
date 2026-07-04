@@ -77,7 +77,7 @@ implementing; docs win over guesses.
 - [x] notifications/ (copy logand mailer/templates/notify + fake_smtp)
 - [x] confirmation/cancel/waitlist-offer emails + reminders_sent ledger
 - [x] scripts/scheduler.py sweep (reminders + completed flips)
-- [ ] Frontend: 3-step /book flow + /booking/{token} manage page wired
+- [x] Frontend: 3-step /book flow + /booking/{token} manage page wired
       to real API (guest journey Playwright test green)
 - [ ] GATE: full guest system journey green in compose test stack
 

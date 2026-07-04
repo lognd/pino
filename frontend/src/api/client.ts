@@ -8,8 +8,6 @@
 //     persisted to localStorage/sessionStorage (docs/design/02).
 //   - Guest routes (booking flow) are CSRF-exempt by design (docs/design/02)
 //     -- only the admin surface attaches X-CSRF-Token.
-//
-// TODO(impl): docs/design/07-frontend-architecture.md
 
 export class RateLimitedError extends Error {
   constructor(public readonly retryAfterSeconds: number) {
@@ -71,9 +69,23 @@ async function request<T>(
     let code: string | undefined;
     let message = `Request failed: ${response.status}`;
     try {
-      const payload = (await response.json()) as { code?: string; message?: string };
-      code = payload.code;
-      message = payload.message ?? message;
+      // api/errors.py::to_http_exception's body is
+      // {"detail": {"detail": "<human message>", "code": "BookingError.X"}}
+      // -- FastAPI's HTTPException(detail=...) adds the OUTER "detail" key,
+      // and to_http_exception's own payload is the inner object. Unwrap
+      // both layers so callers can branch on the stable `code`.
+      const payload = (await response.json()) as {
+        detail?: { detail?: string; code?: string } | string;
+        code?: string;
+        message?: string;
+      };
+      if (payload.detail && typeof payload.detail === "object") {
+        code = payload.detail.code;
+        message = payload.detail.detail ?? message;
+      } else {
+        code = payload.code;
+        message = (typeof payload.detail === "string" ? payload.detail : payload.message) ?? message;
+      }
     } catch {
       // no JSON body -- fall back to the status-based message above.
     }

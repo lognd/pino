@@ -100,6 +100,48 @@ export interface Content {
     comingSoonHeading: string;
     comingSoonNote: string;
   };
+  booking: {
+    steps: { pickClass: string; yourDetails: string; confirm: string };
+    seatsOpenTemplate: string;
+    seatsFullNote: string;
+    waitlistCta: string;
+    waitlistJoinedNote: string;
+    fields: {
+      fullName: string;
+      email: string;
+      phone: string;
+      partySize: string;
+      attestationLabel: string;
+      smsConsentLabel: string;
+    };
+    attestationVersion: string;
+    attestationText: string;
+    smsConsentText: string;
+    errors: {
+      nameRequired: string;
+      emailInvalid: string;
+      phoneInvalid: string;
+      partySizeInvalid: string;
+      attestationRequired: string;
+    };
+    confirmHeading: string;
+    bookCta: string;
+    confirmedHeading: string;
+    confirmedEmailedNote: string;
+    printCta: string;
+    rateLimitedHeading: string;
+    manage: {
+      heading: string;
+      notFoundHeading: string;
+      notFoundNote: string;
+      cancelCta: string;
+      cancelledNote: string;
+      cancelWindowClosedNote: string;
+      resendCta: string;
+      resendSentNote: string;
+      invoiceLinkLabel: string;
+    };
+  };
   notices: {
     notLegalAdvice: string;
     eligibility: string;
@@ -286,6 +328,69 @@ export const CONTENT: Content = {
     comingSoonNote:
       "SAMPLE -- Online booking is not open yet. Call us and we will book " +
       "your class over the phone.",
+  },
+  booking: {
+    steps: {
+      pickClass: "Step 1 of 3: Pick a class",
+      yourDetails: "Step 2 of 3: Your details",
+      confirm: "Step 3 of 3: Confirm",
+    },
+    // {open} and {capacity} are replaced by Book.tsx -- kept as a template
+    // here (not two separate strings) so the plain-words phrasing ("4 of
+    // 10 seats open") stays in one place per doc 04's contract.
+    seatsOpenTemplate: "{open} of {capacity} seats open",
+    seatsFullNote: "This class is full.",
+    waitlistCta: "Join the waitlist",
+    waitlistJoinedNote:
+      "You are on the waitlist. We will call or email you if a seat opens up.",
+    fields: {
+      fullName: "Full name",
+      email: "Email address",
+      phone: "Phone number (optional, so we can call if anything changes)",
+      partySize: "How many people are you booking for?",
+      attestationLabel: "I have read and agree to the statement above",
+      smsConsentLabel: "It is okay to text me reminders about this class",
+    },
+    // SAMPLE version string -- bump this whenever attestationText changes
+    // so a stored booking always traces to the exact wording it was shown
+    // (docs/design/06 section 3).
+    attestationVersion: "attestation-v1-sample",
+    attestationText:
+      "SAMPLE -- By checking this box, I state that I am of qualifying " +
+      "age and legally able to possess a firearm under Florida and " +
+      "federal law. I understand that this is a statement I am making, " +
+      "not identity verification, and that I will be asked to show ID in " +
+      "person. (Pending counsel review of final wording.)",
+    smsConsentText:
+      "SAMPLE -- Message and data rates may apply. Reply STOP to any " +
+      "text to opt out at any time.",
+    errors: {
+      nameRequired: "Please enter your full name.",
+      emailInvalid: "Please enter a valid email address.",
+      phoneInvalid: "Please enter a valid phone number, or leave it blank.",
+      partySizeInvalid: "Party size must be at least 1.",
+      attestationRequired: "Please check the box above to continue.",
+    },
+    confirmHeading: "Review your booking",
+    bookCta: "Book this class",
+    confirmedHeading: "You're booked!",
+    confirmedEmailedNote: "We emailed you a link to manage this booking.",
+    printCta: "Print this page",
+    rateLimitedHeading: "Too many attempts",
+    manage: {
+      heading: "Manage your booking",
+      notFoundHeading: "We could not find that booking",
+      notFoundNote:
+        "This link may be expired or mistyped. Call us and we can look up " +
+        "your booking over the phone.",
+      cancelCta: "Cancel this booking",
+      cancelledNote: "This booking has been cancelled.",
+      cancelWindowClosedNote:
+        "It's too close to the class start time to cancel online -- please call.",
+      resendCta: "Resend confirmation email",
+      resendSentNote: "We sent your confirmation email again.",
+      invoiceLinkLabel: "View invoice / pay deposit",
+    },
   },
   notices: {
     notLegalAdvice,

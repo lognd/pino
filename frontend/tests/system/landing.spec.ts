@@ -71,17 +71,21 @@ test.describe("Landing page", () => {
     }
   });
 
-  test("Book CTA leads to /book which shows coming-soon copy and a phone fallback", async ({
+  test("Book CTA leads to /book (step 1 of the real booking flow) with a phone fallback", async ({
     page,
   }) => {
     await page.goto("/");
     await page.getByRole("link", { name: "Book a class", exact: true }).first().click();
     await expect(page).toHaveURL(/\/book$/);
 
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-      /Online Booking Is Coming Soon/,
-    );
-    await expect(page.getByText(/Online booking is not open yet/)).toBeVisible();
+    // This "public" project is backend-free (no webServer API), so step 1
+    // will show its "could not load classes" fallback state rather than a
+    // live course list -- the real API-backed journey is exercised by the
+    // "fullstack" project's guest-booking-journey.spec.ts instead. This
+    // test only asserts the route itself renders (no dead SPA shell) and
+    // the phone fallback is present, per doc 04's "every step shows the
+    // phone-call fallback" rule.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(/Book a Class/);
 
     // Phone fallback: a tel: link, visible and non-empty (elderly-first
     // contract -- doc 09's "no dead ends" bar for anyone who can't/won't

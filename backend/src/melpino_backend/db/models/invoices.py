@@ -100,9 +100,7 @@ class Invoice(Base):
     # docs/design/05-payments-and-invoicing.md. Always populated (unlike
     # stripe_payment_intent_id) since every invoice needs a pay link.
     pay_token_hash: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    stripe_payment_intent_id: Mapped[str | None] = mapped_column(
-        Text, nullable=True
-    )
+    stripe_payment_intent_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Set exactly once, at the moment status flips to "paid" -- never
     # touched again after that, even if the invoice is later voided.
     paid_at: Mapped[datetime | None] = mapped_column(
@@ -129,9 +127,7 @@ class InvoiceLineItem(Base):
 
     __tablename__ = "invoice_line_items"
     __table_args__ = (
-        CheckConstraint(
-            "quantity > 0", name="ck_invoice_line_items_quantity_positive"
-        ),
+        CheckConstraint("quantity > 0", name="ck_invoice_line_items_quantity_positive"),
         CheckConstraint(
             "unit_price >= 0", name="ck_invoice_line_items_unit_price_nonnegative"
         ),

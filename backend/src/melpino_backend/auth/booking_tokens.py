@@ -72,9 +72,7 @@ async def find_booking_by_token(
     expires_at = session_ends_at + _TOKEN_VALIDITY_AFTER_SESSION_END
     now = datetime.now(timezone.utc)
     if now >= expires_at:
-        logger.info(
-            "booking token lookup failed: expired booking_id=%s", booking.id
-        )
+        logger.info("booking token lookup failed: expired booking_id=%s", booking.id)
         return Err(BookingError.TokenInvalid)
 
     logger.info("booking token lookup succeeded booking_id=%s", booking.id)

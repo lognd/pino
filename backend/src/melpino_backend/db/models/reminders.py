@@ -18,9 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from melpino_backend.db.base import Base
 
-_KIND_CHECK = (
-    "kind in ('confirmation', 'reminder', 'waitlist_offer', 'cancellation')"
-)
+_KIND_CHECK = "kind in ('confirmation', 'reminder', 'waitlist_offer', 'cancellation')"
 
 
 class ReminderSent(Base):

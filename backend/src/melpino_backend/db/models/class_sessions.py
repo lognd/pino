@@ -21,9 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from melpino_backend.db.base import Base
 
-_STATUS_CHECK = (
-    "status in ('draft', 'published', 'full', 'completed', 'cancelled')"
-)
+_STATUS_CHECK = "status in ('draft', 'published', 'full', 'completed', 'cancelled')"
 
 
 class ClassSession(Base):
@@ -53,9 +51,7 @@ class ClassSession(Base):
         ForeignKey("courses.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    starts_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     location_name: Mapped[str] = mapped_column(Text, nullable=False)
     location_addr: Mapped[str] = mapped_column(Text, nullable=False, default="")

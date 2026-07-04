@@ -5,10 +5,57 @@ from __future__ import annotations
 # docs/design/02-auth-and-security.md's rate limits/honeypot. This route's
 # POSTs are CSRF-exempt (no session cookie exists for guests at all, see
 # app/app.py) and are the highest-abuse surface in this backend.
-from fastapi import APIRouter
+import argparse
+import logging
+from datetime import datetime, timezone
+from uuid import UUID
+
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from melpino_backend.api.errors import to_http_exception
+from melpino_backend.app.config import AppConfig
+from melpino_backend.auth.rate_limit import (
+    BOOKING_CREATE,
+    BOOKING_MANAGE_LOOKUP,
+    rate_limit,
+)
+from melpino_backend.db.base import get_db
+from melpino_backend.db.models.class_sessions import ClassSession
+from melpino_backend.db.models.courses import Course
+from melpino_backend.domain.booking.service import (
+    BookingInput,
+    cancel_booking_by_token,
+    create_booking,
+    get_booking_by_token,
+    join_waitlist,
+    manage_url_for,
+    resend_confirmation,
+    within_cancellation_window,
+)
+from melpino_backend.errors import BookingError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/bookings", tags=["bookings"])
+
+# RateLimiter is constructed once at import time (it backs a Depends
+# default), so redis_url comes from config here too -- see api/auth.py.
+_cfg = AppConfig.from_external(argparse.Namespace())
+_rl_create = rate_limit("booking_create", *BOOKING_CREATE, redis_url=_cfg.redis_url)
+_rl_manage = rate_limit(
+    "booking_manage", *BOOKING_MANAGE_LOOKUP, redis_url=_cfg.redis_url
+)
+
+
+class AttestationInput(BaseModel):
+    """The eligibility attestation the booker agreed to (see doc 06)."""
+
+    model_config = {}
+
+    version: str = ""
+    accepted: bool = False
 
 
 class BookingCreateRequest(BaseModel):
@@ -23,45 +70,157 @@ class BookingCreateRequest(BaseModel):
     email: str
     phone: str | None = None
     party_size: int = 1
+    attestation: AttestationInput = AttestationInput()
     sms_consent: bool = False
     honeypot_field: str = ""
 
 
+class BookingCreateResponse(BaseModel):
+    """What the confirm step needs: the booking id + its private manage URL."""
+
+    model_config = {}
+
+    booking_id: str
+    manage_url: str
+
+
+class BookingDetailResponse(BaseModel):
+    """The manage-page view of one booking (resolved only via manage token)."""
+
+    model_config = {}
+
+    booking_id: str
+    status: str
+    party_size: int
+    course_title: str
+    starts_at: str
+    ends_at: str
+    location_name: str
+    location_addr: str
+    can_cancel_online: bool
+
+
+def _to_input(payload: BookingCreateRequest, session_id: UUID) -> BookingInput:
+    return BookingInput(
+        session_id=session_id,
+        full_name=payload.full_name,
+        email=payload.email,
+        party_size=payload.party_size,
+        attestation_version=payload.attestation.version,
+        attestation_accepted=payload.attestation.accepted,
+        sms_consent=payload.sms_consent,
+        phone=payload.phone or "",
+    )
+
+
+def _parse_session_id(raw: str) -> UUID | None:
+    try:
+        return UUID(raw)
+    except ValueError:
+        return None
+
+
 @router.post("")
-async def create_booking(payload: BookingCreateRequest) -> dict:
+async def create_booking_endpoint(
+    payload: BookingCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    _rl: None = Depends(_rl_create),
+) -> dict:
     """POST /api/bookings -- rate-limited 5/hour, honeypot-checked."""
-    raise NotImplementedError(
-        "see docs/design/04-booking-and-scheduling.md"
-    )  # TODO(impl)
+    # HONEYPOT: a filled hidden field means a bot. Return the SAME
+    # success-shaped response with NO row created and no email sent --
+    # never a 422, which would teach the bot to omit the field. See
+    # docs/design/02 and the mission report.
+    if payload.honeypot_field:
+        logger.info("honeypot triggered on booking create -- silently accepted")
+        return {"status": "ok"}
+
+    session_id = _parse_session_id(payload.session_id)
+    if session_id is None:
+        raise to_http_exception(BookingError.SessionNotFound)
+    result = await create_booking(db, _cfg, _to_input(payload, session_id))
+    if result.is_err:
+        raise to_http_exception(result.danger_err)
+    booking, raw_token = result.danger_ok
+    return BookingCreateResponse(
+        booking_id=str(booking.id), manage_url=manage_url_for(_cfg, raw_token)
+    ).model_dump()
 
 
 @router.post("/waitlist")
-async def join_waitlist(payload: BookingCreateRequest) -> dict:
+async def join_waitlist_endpoint(
+    payload: BookingCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    _rl: None = Depends(_rl_create),
+) -> dict:
     """POST /api/bookings/waitlist -- same shape minus payment."""
-    raise NotImplementedError(
-        "see docs/design/04-booking-and-scheduling.md"
-    )  # TODO(impl)
+    # Same honeypot policy as create (identical success-shaped no-op).
+    if payload.honeypot_field:
+        logger.info("honeypot triggered on waitlist join -- silently accepted")
+        return {"status": "ok"}
+
+    session_id = _parse_session_id(payload.session_id)
+    if session_id is None:
+        raise to_http_exception(BookingError.SessionNotFound)
+    result = await join_waitlist(db, _to_input(payload, session_id))
+    if result.is_err:
+        raise to_http_exception(result.danger_err)
+    return {"status": "ok"}
 
 
 @router.get("/manage/{token}")
-async def get_booking_by_token(token: str) -> dict:
+async def get_booking_by_token_endpoint(
+    token: str,
+    db: AsyncSession = Depends(get_db),
+    _rl: None = Depends(_rl_manage),
+) -> dict:
     """GET /api/bookings/manage/{token} -- rate-limited 30/hour."""
-    raise NotImplementedError(
-        "see docs/design/04-booking-and-scheduling.md"
-    )  # TODO(impl)
+    result = await get_booking_by_token(db, token)
+    if result.is_err:
+        raise to_http_exception(result.danger_err)
+    booking = result.danger_ok
+    session = await db.get(ClassSession, booking.session_id)
+    assert session is not None  # FK RESTRICT: a booking's session always exists
+    course = await db.get(Course, session.course_id)
+    assert course is not None
+    now = datetime.now(timezone.utc)
+    can_cancel = booking.status == "confirmed" and within_cancellation_window(
+        session.starts_at, now, _cfg.booking_cancellation_hours
+    )
+    return BookingDetailResponse(
+        booking_id=str(booking.id),
+        status=booking.status,
+        party_size=booking.party_size,
+        course_title=course.title,
+        starts_at=session.starts_at.isoformat(),
+        ends_at=session.ends_at.isoformat(),
+        location_name=session.location_name,
+        location_addr=session.location_addr,
+        can_cancel_online=can_cancel,
+    ).model_dump()
 
 
 @router.post("/manage/{token}/cancel")
-async def cancel_booking_by_token(token: str) -> dict:
+async def cancel_booking_by_token_endpoint(
+    token: str,
+    db: AsyncSession = Depends(get_db),
+    _rl: None = Depends(_rl_manage),
+) -> dict:
     """POST /api/bookings/manage/{token}/cancel."""
-    raise NotImplementedError(
-        "see docs/design/04-booking-and-scheduling.md"
-    )  # TODO(impl)
+    result = await cancel_booking_by_token(db, _cfg, token)
+    if result.is_err:
+        raise to_http_exception(result.danger_err)
+    return {"status": "cancelled"}
 
 
 @router.post("/manage/{token}/resend-confirmation")
-async def resend_confirmation(token: str) -> None:
+async def resend_confirmation_endpoint(
+    token: str,
+    db: AsyncSession = Depends(get_db),
+    _rl: None = Depends(_rl_manage),
+) -> dict:
     """POST /api/bookings/manage/{token}/resend-confirmation."""
-    raise NotImplementedError(
-        "see docs/design/04-booking-and-scheduling.md"
-    )  # TODO(impl)
+    result = await resend_confirmation(db, _cfg, token)
+    if result.is_err:
+        raise to_http_exception(result.danger_err)
+    return {"status": "ok"}

@@ -165,13 +165,9 @@ def upgrade() -> None:
         sa.Column("starts_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("ends_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("location_name", sa.Text(), nullable=False),
-        sa.Column(
-            "location_addr", sa.Text(), server_default="", nullable=False
-        ),
+        sa.Column("location_addr", sa.Text(), server_default="", nullable=False),
         sa.Column("capacity", sa.Integer(), nullable=False),
-        sa.Column(
-            "status", sa.Text(), server_default="draft", nullable=False
-        ),
+        sa.Column("status", sa.Text(), server_default="draft", nullable=False),
         sa.Column("notes", sa.Text(), server_default="", nullable=False),
         sa.Column(
             "created_at",
@@ -281,9 +277,7 @@ def upgrade() -> None:
             "or recurrence_interval is null",
             name="ck_invoices_recurrence_interval",
         ),
-        sa.ForeignKeyConstraint(
-            ["student_id"], ["students.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["student_id"], ["students.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("pay_token_hash"),
     )
@@ -582,9 +576,7 @@ def downgrade() -> None:
     op.drop_table("waivers")
     op.drop_table("waitlist_entries")
     op.drop_index("ix_bookings_session_id_confirmed", table_name="bookings")
-    op.drop_index(
-        "uq_bookings_session_id_student_id_confirmed", table_name="bookings"
-    )
+    op.drop_index("uq_bookings_session_id_student_id_confirmed", table_name="bookings")
     op.drop_table("bookings")
     op.drop_table("payment_proofs")
     op.drop_index("uq_refunds_paypal_refund_id", table_name="refunds")

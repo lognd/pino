@@ -3,48 +3,263 @@
 // "path-mirroring contract" (the important part): every handler MUST
 // intercept the exact HTTP method and path the real backend will later
 // serve, so graduating a screen from mockup to real means deleting its
-// handler block here and nothing else. CRIB:
-// logand.app/frontend/src/mocks/handlers.ts for the overall MSW v2
-// setup and the sessionStorage-backed fake-role pattern (a plain module
-// variable is wiped by any page reload; the real backend persists via an
-// HttpOnly cookie, so sessionStorage is the closest mock-mode analog).
+// handler block here and nothing else.
 //
 // Handlers are grouped by screen/resource, one comment-headed block per
 // screen (per doc 14: "keep the handler file organized so one screen's
-// handlers can be removed as a clean block"). Nothing is wired up yet --
-// see TODO markers below, one per doc-14 screen.
+// handlers can be removed as a clean block"). Mutations write through to
+// the in-memory arrays in ./data so the mockup feels alive for the tab
+// session; a reload resets everything (desirable per doc 14).
+//
+// Fake auth gate: isMockAuthed lives in sessionStorage (wiped on tab
+// close, survives reload -- the closest mock-mode analog to the real
+// backend's HttpOnly session cookie) under the key below. Grants no real
+// security; see AdminGuard.tsx and Login.tsx.
 
 import { http, HttpResponse } from "msw";
+import {
+  bookings,
+  courses,
+  invoices,
+  sessions,
+  settings,
+  students,
+  waitlistEntries,
+  waivers,
+  type MockPayment,
+} from "./data";
+
+export const MOCK_AUTH_SESSION_KEY = "mp_admin_mock_authed";
+export const MOCK_LOGIN_PASSWORD = "letmein";
+
+function isMockAuthed(): boolean {
+  return sessionStorage.getItem(MOCK_AUTH_SESSION_KEY) === "true";
+}
+
+function courseFor(sessionRow: (typeof sessions)[number]) {
+  return courses.find((c) => c.id === sessionRow.course_id) ?? null;
+}
+
+function rosterFor(sessionId: string) {
+  return bookings
+    .filter((b) => b.session_id === sessionId && b.status !== "cancelled")
+    .map((b) => ({ ...b, student: students.find((s) => s.id === b.student_id) ?? null }));
+}
+
+function waitlistFor(sessionId: string) {
+  return waitlistEntries
+    .filter((w) => w.session_id === sessionId)
+    .map((w) => ({ ...w, student: students.find((s) => s.id === w.student_id) ?? null }));
+}
 
 export const handlers = [
-  // --- Dashboard (/admin) -----------------------------------------------
-  // TODO(impl): GET /api/admin/dashboard -- docs/design/14-admin-mockup.md
+  // --- Fake auth gate (docs/design/14-admin-mockup.md) -------------------
+  // Real endpoints: POST /api/auth/login, GET /api/auth/me,
+  // POST /api/auth/logout. Accepts any non-empty email + the hardcoded
+  // demo password; flips the sessionStorage flag AdminGuard/useMe reads.
+  http.post("/api/auth/login", async ({ request }) => {
+    const body = (await request.json()) as { email?: string; password?: string };
+    if (!body.email || body.password !== MOCK_LOGIN_PASSWORD) {
+      return HttpResponse.json({ code: "invalid_credentials", message: "Invalid email or password" }, { status: 401 });
+    }
+    sessionStorage.setItem(MOCK_AUTH_SESSION_KEY, "true");
+    return HttpResponse.json({ status: "ok" });
+  }),
 
-  // --- Calendar / Schedule (/admin/schedule) -----------------------------
-  // TODO(impl): GET /api/admin/sessions -- docs/design/14-admin-mockup.md
-  // TODO(impl): POST /api/admin/sessions -- docs/design/14-admin-mockup.md
+  http.post("/api/auth/logout", () => {
+    sessionStorage.removeItem(MOCK_AUTH_SESSION_KEY);
+    return HttpResponse.json({ status: "ok" });
+  }),
 
-  // --- Session detail w/ roster (/admin/schedule/:sessionId) -------------
-  // TODO(impl): GET /api/admin/sessions/:id -- docs/design/14-admin-mockup.md
+  http.get("/api/auth/me", () => {
+    if (!isMockAuthed()) {
+      return HttpResponse.json({ code: "unauthenticated", message: "Not logged in" }, { status: 401 });
+    }
+    return HttpResponse.json({ user_id: "mock-admin-1", role: "admin" });
+  }),
+
+  // --- Dashboard (/admin) -------------------------------------------------
+  // Real endpoint: GET /api/admin/dashboard
+  http.get("/api/admin/dashboard", () => {
+    const now = new Date("2026-07-04T00:00:00Z");
+    const upcoming = sessions
+      .filter((s) => new Date(s.starts_at) >= now && s.status !== "cancelled")
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+      .slice(0, 5)
+      .map((s) => ({
+        ...s,
+        course: courseFor(s),
+        seats_filled: rosterFor(s.id).reduce((sum, b) => sum + b.party_size, 0),
+      }));
+    const unpaid_invoice_count = invoices.filter((i) => i.status !== "paid").length;
+    return HttpResponse.json({ upcoming_sessions: upcoming, unpaid_invoice_count });
+  }),
+
+  // --- Calendar / Schedule (/admin/schedule) ------------------------------
+  // Real endpoints: GET /api/admin/sessions, POST /api/admin/sessions
+  http.get("/api/admin/sessions", () => {
+    const withCourse = sessions.map((s) => ({
+      ...s,
+      course: courseFor(s),
+      seats_filled: rosterFor(s.id).reduce((sum, b) => sum + b.party_size, 0),
+    }));
+    return HttpResponse.json(withCourse);
+  }),
+
+  http.post("/api/admin/sessions", async ({ request }) => {
+    const body = (await request.json()) as Partial<(typeof sessions)[number]>;
+    const created = {
+      id: `session-${sessions.length + 1}`,
+      course_id: body.course_id ?? courses[0].id,
+      starts_at: body.starts_at ?? new Date().toISOString(),
+      ends_at: body.ends_at ?? new Date().toISOString(),
+      location_name: body.location_name ?? "SAMPLE Range, Clearwater",
+      location_addr: body.location_addr ?? "",
+      capacity: body.capacity ?? 12,
+      status: "draft" as const,
+      notes: body.notes ?? "",
+    };
+    sessions.push(created);
+    return HttpResponse.json(created, { status: 201 });
+  }),
+
+  // --- Session detail w/ roster (/admin/schedule/:sessionId) --------------
+  // Real endpoint: GET /api/admin/sessions/:id
+  http.get("/api/admin/sessions/:id", ({ params }) => {
+    const session = sessions.find((s) => s.id === params.id);
+    if (!session) {
+      return HttpResponse.json({ code: "not_found", message: "Session not found" }, { status: 404 });
+    }
+    return HttpResponse.json({
+      ...session,
+      course: courseFor(session),
+      roster: rosterFor(session.id),
+      waitlist: waitlistFor(session.id),
+    });
+  }),
+
+  // Real endpoint: PATCH /api/admin/bookings/:id -- mark a roster entry
+  // attended/no-show (Session detail's "mark present/completed").
+  http.patch("/api/admin/bookings/:id", async ({ params, request }) => {
+    const booking = bookings.find((b) => b.id === params.id);
+    if (!booking) {
+      return HttpResponse.json({ code: "not_found", message: "Booking not found" }, { status: 404 });
+    }
+    const body = (await request.json()) as { status?: (typeof bookings)[number]["status"] };
+    if (body.status) booking.status = body.status;
+    return HttpResponse.json(booking);
+  }),
+
+  // Real endpoint: POST /api/admin/sessions/:id/waitlist/:entryId/promote --
+  // move a waitlisted student into an open seat.
+  http.post("/api/admin/sessions/:id/waitlist/:entryId/promote", ({ params }) => {
+    const entryIndex = waitlistEntries.findIndex(
+      (w) => w.id === params.entryId && w.session_id === params.id,
+    );
+    if (entryIndex === -1) {
+      return HttpResponse.json({ code: "not_found", message: "Waitlist entry not found" }, { status: 404 });
+    }
+    const [entry] = waitlistEntries.splice(entryIndex, 1);
+    const promoted = {
+      id: `booking-${bookings.length + 1}`,
+      session_id: entry.session_id,
+      student_id: entry.student_id,
+      party_size: entry.party_size,
+      status: "confirmed" as const,
+      invoice_id: null,
+    };
+    bookings.push(promoted);
+    return HttpResponse.json(promoted, { status: 201 });
+  }),
 
   // --- Students (/admin/students) -----------------------------------------
-  // TODO(impl): GET /api/admin/students -- docs/design/14-admin-mockup.md
+  // Real endpoint: GET /api/admin/students
   http.get("/api/admin/students", () => {
-    return HttpResponse.json([]);
+    const withHistory = students.map((s) => ({
+      ...s,
+      bookings: bookings.filter((b) => b.student_id === s.id),
+      waivers: waivers.filter((w) => w.student_id === s.id),
+    }));
+    return HttpResponse.json(withHistory);
+  }),
+
+  // Real endpoint: GET /api/admin/students/:id
+  http.get("/api/admin/students/:id", ({ params }) => {
+    const student = students.find((s) => s.id === params.id);
+    if (!student) {
+      return HttpResponse.json({ code: "not_found", message: "Student not found" }, { status: 404 });
+    }
+    return HttpResponse.json({
+      ...student,
+      bookings: bookings.filter((b) => b.student_id === student.id),
+      waivers: waivers.filter((w) => w.student_id === student.id),
+    });
   }),
 
   // --- Invoices (/admin/invoices) ------------------------------------------
-  // TODO(impl): GET /api/admin/invoices -- docs/design/14-admin-mockup.md
+  // Real endpoint: GET /api/admin/invoices
+  http.get("/api/admin/invoices", () => {
+    const withStudent = invoices.map((inv) => ({
+      ...inv,
+      student: students.find((s) => s.id === inv.student_id) ?? null,
+    }));
+    return HttpResponse.json(withStudent);
+  }),
 
-  // --- Record payment (/admin/invoices/:invoiceId/pay) ---------------------
-  // TODO(impl): POST /api/admin/invoices/:id/payments -- docs/design/14-admin-mockup.md
+  // Real endpoint: GET /api/admin/invoices/:id
+  http.get("/api/admin/invoices/:id", ({ params }) => {
+    const invoice = invoices.find((i) => i.id === params.id);
+    if (!invoice) {
+      return HttpResponse.json({ code: "not_found", message: "Invoice not found" }, { status: 404 });
+    }
+    return HttpResponse.json({
+      ...invoice,
+      student: students.find((s) => s.id === invoice.student_id) ?? null,
+    });
+  }),
+
+  // --- Record payment (/admin/invoices/:invoiceId/pay) ----------------------
+  // Real endpoint: POST /api/admin/invoices/:id/payments
+  http.post("/api/admin/invoices/:id/payments", async ({ params, request }) => {
+    const invoice = invoices.find((i) => i.id === params.id);
+    if (!invoice) {
+      return HttpResponse.json({ code: "not_found", message: "Invoice not found" }, { status: 404 });
+    }
+    const body = (await request.json()) as { method?: MockPayment["method"]; amount?: string; note?: string };
+    const amount = body.amount ?? "0.00";
+    const payment: MockPayment = {
+      id: `payment-${invoice.payments.length + 1}-${invoice.id}`,
+      method: body.method ?? "cash",
+      amount,
+      recorded_at: new Date().toISOString(),
+      note: body.note ?? "",
+    };
+    invoice.payments.push(payment);
+    const paidTotal = invoice.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+    invoice.amount_paid = paidTotal.toFixed(2);
+    invoice.status = paidTotal >= Number(invoice.amount_due) ? "paid" : paidTotal > 0 ? "partial" : "unpaid";
+    return HttpResponse.json(invoice, { status: 201 });
+  }),
 
   // --- Waivers (/admin/waivers) ---------------------------------------------
-  // TODO(impl): GET /api/admin/waivers -- docs/design/14-admin-mockup.md
+  // Real endpoint: GET /api/admin/waivers
+  http.get("/api/admin/waivers", () => {
+    const withStudent = waivers.map((w) => ({
+      ...w,
+      student: students.find((s) => s.id === w.student_id) ?? null,
+    }));
+    return HttpResponse.json(withStudent);
+  }),
 
   // --- Settings (/admin/settings) --------------------------------------------
-  // TODO(impl): GET /api/admin/settings -- docs/design/14-admin-mockup.md
+  // Real endpoint: GET /api/admin/settings, PATCH /api/admin/settings
+  http.get("/api/admin/settings", () => {
+    return HttpResponse.json(settings);
+  }),
 
-  // --- Fake auth gate (docs/design/14-admin-mockup.md) -----------------------
-  // TODO(impl): POST /api/auth/login, GET /api/auth/me
+  http.patch("/api/admin/settings", async ({ request }) => {
+    const body = (await request.json()) as Partial<typeof settings>;
+    Object.assign(settings, body);
+    return HttpResponse.json(settings);
+  }),
 ];

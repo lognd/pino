@@ -6,7 +6,7 @@
 //
 // TODO(impl): docs/design/02-auth-and-security.md
 
-import { apiGet } from "./client";
+import { apiGet, apiPost } from "./client";
 
 export interface Me {
   user_id: string;
@@ -17,10 +17,10 @@ export function fetchMe(): Promise<Me> {
   return apiGet<Me>("/api/auth/me");
 }
 
-export function login(_email: string, _password: string): Promise<{ status: string }> {
-  throw new Error("TODO(impl): docs/design/02-auth-and-security.md");
+export function login(email: string, password: string): Promise<{ status: string }> {
+  return apiPost<{ status: string }>("/api/auth/login", { email, password });
 }
 
 export function logout(): Promise<{ status: string }> {
-  throw new Error("TODO(impl): docs/design/02-auth-and-security.md");
+  return apiPost<{ status: string }>("/api/auth/logout");
 }

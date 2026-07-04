@@ -30,7 +30,16 @@ function renderApp(): void {
   );
 }
 
-if (import.meta.env.VITE_USE_MOCKS === "true") {
+// MSW only ever starts for the /admin mockup SPA, and only in dev or an
+// explicit VITE_USE_MOCKS build (docs/design/14-admin-mockup.md's route
+// gating + mockup mechanics) -- it must never intercept public-site
+// requests in the prerendered build or the Playwright "public" project's
+// preview server, which share this same entry point.
+const shouldStartMocks =
+  (import.meta.env.DEV || import.meta.env.VITE_USE_MOCKS === "true") &&
+  window.location.pathname.startsWith("/admin");
+
+if (shouldStartMocks) {
   import("./mocks/browser").then(({ worker }) => {
     worker.start({ onUnhandledRequest: "bypass" }).then(renderApp);
   });

@@ -108,9 +108,9 @@ implementing; docs win over guesses.
 
 ## P6 -- Admin mockup (docs/design/14; anytime after P1)
 
-- [ ] MSW browser/handlers/data + fake gate + MOCKUP banner
-- [ ] 8 mockup screens per 14's route list
-- [ ] Playwright mockup smoke test
+- [x] MSW browser/handlers/data + fake gate + MOCKUP banner
+- [x] 8 mockup screens per 14's route list
+- [x] Playwright mockup smoke test
 - [ ] HUMAN INPUT: demo to Mel; record per-screen answers in 14;
       then re-scope P7+ admin build accordingly
 

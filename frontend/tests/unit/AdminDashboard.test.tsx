@@ -2,30 +2,31 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AdminStudents } from "../../src/app/routes/admin/Students";
+import { AdminDashboard } from "../../src/app/routes/admin/Dashboard";
 
 // docs/design/14-admin-mockup.md's test obligations: each mockup screen
 // renders with MSW active and shows sample data; every screen renders the
 // MOCKUP -- SAMPLE DATA banner.
-function renderStudents() {
+function renderDashboard() {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <AdminStudents />
+        <AdminDashboard />
       </MemoryRouter>
     </QueryClientProvider>,
   );
 }
 
-describe("AdminStudents (mockup screen)", () => {
-  it("renders SAMPLE Jane Doe from mocks/data.ts via MSW", async () => {
-    renderStudents();
-    expect(await screen.findByText("SAMPLE Jane Doe")).toBeInTheDocument();
+describe("AdminDashboard (mockup screen)", () => {
+  it("renders sample upcoming sessions from mocks/data.ts via MSW", async () => {
+    renderDashboard();
+    expect(await screen.findByText(/SAMPLE/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/unpaid invoice/i)).length).toBeGreaterThan(0);
   });
 
   it("renders the MOCKUP -- SAMPLE DATA banner", async () => {
-    renderStudents();
+    renderDashboard();
     expect(await screen.findByRole("status")).toHaveTextContent("MOCKUP -- SAMPLE DATA");
   });
 });

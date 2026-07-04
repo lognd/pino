@@ -46,3 +46,4 @@ data/
 
 # Claude local session state
 .claude/
+dist-mock/

@@ -7,7 +7,8 @@
 // 2px outline on black. Both meet the >=48x48 tap target; focus-visible
 // ring is applied globally (see styles/tailwind.css).
 
-import type { ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, PointerEvent } from "react";
+import { useBulletholeClicks } from "../hero/useBulletholeClicks";
 
 export interface BigButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary";
@@ -30,9 +31,20 @@ export function BigButton({
   ...rest
 }: BigButtonProps) {
   const classes = [BASE, VARIANT[variant], className].filter(Boolean).join(" ");
+  // Decorative bullet-hole click feedback (docs/design/08 Revision 2):
+  // pointer-events-none portal, no-op under reduced motion, never delays
+  // the click itself. Caller-supplied onPointerDown still runs.
+  const { overlay, bulletProps } = useBulletholeClicks();
+  const handlePointerDown = (e: PointerEvent<HTMLButtonElement>) => {
+    bulletProps.onPointerDown(e);
+    rest.onPointerDown?.(e);
+  };
   return (
-    <button {...rest} className={classes}>
-      {children}
-    </button>
+    <>
+      <button {...rest} onPointerDown={handlePointerDown} className={classes}>
+        {children}
+      </button>
+      {overlay}
+    </>
   );
 }

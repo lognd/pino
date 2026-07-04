@@ -8,12 +8,17 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { businessLegalName, businessShortName } from "../../lib/brand";
 import { CONTENT } from "../../content/mock";
+import { useBulletholeClicks } from "../../hero/useBulletholeClicks";
 
 const NAV_LINK =
   "text-lg font-semibold text-mp-white underline-offset-4 hover:underline";
 
 export function Shell({ children }: { children: ReactNode }) {
   const year = new Date().getFullYear();
+  // Decorative bullet-hole click feedback on nav/footer links
+  // (docs/design/08 Revision 2): pointer-events-none portal, no-op under
+  // reduced motion, never delays navigation. Overlay rendered once below.
+  const { overlay, bulletProps } = useBulletholeClicks();
   return (
     <div className="flex min-h-screen flex-col bg-mp-black text-mp-white">
       <header className="border-b-2 border-mp-border px-4 py-4">
@@ -27,17 +32,29 @@ export function Shell({ children }: { children: ReactNode }) {
           </Link>
           <ul className="flex flex-wrap items-center gap-6">
             <li>
-              <Link to={CONTENT.nav.courses.path} className={NAV_LINK}>
+              <Link
+                to={CONTENT.nav.courses.path}
+                className={NAV_LINK}
+                {...bulletProps}
+              >
                 {CONTENT.nav.courses.label}
               </Link>
             </li>
             <li>
-              <Link to={CONTENT.nav.about.path} className={NAV_LINK}>
+              <Link
+                to={CONTENT.nav.about.path}
+                className={NAV_LINK}
+                {...bulletProps}
+              >
                 {CONTENT.nav.about.label}
               </Link>
             </li>
             <li>
-              <Link to={CONTENT.nav.contact.path} className={NAV_LINK}>
+              <Link
+                to={CONTENT.nav.contact.path}
+                className={NAV_LINK}
+                {...bulletProps}
+              >
                 {CONTENT.nav.contact.label}
               </Link>
             </li>
@@ -51,6 +68,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 // text-lg (18px) fell just short and tripped axe
                 // color-contrast (doc 09's "check every new pairing").
                 className="inline-block min-h-[48px] bg-mp-red px-4 py-2 text-xl font-bold uppercase text-mp-white hover:bg-mp-red-press"
+                {...bulletProps}
               >
                 {CONTENT.nav.book.label}
               </Link>
@@ -67,7 +85,11 @@ export function Shell({ children }: { children: ReactNode }) {
             <ul className="flex flex-wrap gap-6">
               {CONTENT.footer.legalLinks.map((link) => (
                 <li key={link.path}>
-                  <Link to={link.path} className="underline hover:text-mp-white">
+                  <Link
+                    to={link.path}
+                    className="underline hover:text-mp-white"
+                    {...bulletProps}
+                  >
                     {link.label}
                   </Link>
                 </li>
@@ -85,6 +107,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </p>
         </div>
       </footer>
+      {overlay}
     </div>
   );
 }

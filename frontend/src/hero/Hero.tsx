@@ -5,7 +5,8 @@
 //   1. prefers-reduced-motion -> poster + static wordmark, no scrub loop.
 //   2. before the source finishes init -> poster is what paints (rung 2's
 //      no-JS prerender is the page's job; this covers the pre-init window).
-//   3. touch/keyboard -> handled in useScrub (drift only, no scroll hijack).
+//   3. touch/keyboard -> handled in useScrub (one-shot settle-through on
+//      load, then rest; never hijacks touch scrolling).
 //   4. low power (2 consecutive sub-30fps seconds) -> dispose + drop to
 //      poster + one log line (via lib/logging.ts; its stub currently throws,
 //      so the call is wrapped -- see TODO below).
@@ -16,21 +17,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "./Wordmark";
 import { useScrub } from "./useScrub";
+import { prefersReducedMotion, isTouchDevice } from "./env";
 import type { ScrubSource } from "./timeline";
 import { createHeroSource, resolveHeroSourceKind } from "./sources/select";
 import { logWarn } from "../lib/logging";
 
 const POSTER_URL = "/brand/hero-poster.svg";
 const MAX_DPR = 2;
-
-/** True when the user asked for reduced motion (SSR-safe). */
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-}
 
 type HeroMode = "poster" | "live";
 
@@ -40,8 +33,12 @@ export function Hero() {
   const sourceRef = useRef<ScrubSource | null>(null);
   const [mode, setMode] = useState<HeroMode>("poster");
   const [reduced] = useState<boolean>(prefersReducedMotion);
+  const [touch] = useState<boolean>(isTouchDevice);
 
-  const scrub = useScrub(containerRef, { enabled: mode === "live" && !reduced });
+  const scrub = useScrub(containerRef, {
+    enabled: mode === "live" && !reduced,
+    touch,
+  });
 
   // Lazy source init behind requestIdleCallback so Landing LCP (the poster)
   // is never blocked by hero setup. Failure (e.g. the VideoSource stub)

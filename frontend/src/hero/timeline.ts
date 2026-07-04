@@ -21,3 +21,17 @@ export interface ScrubSource {
  * |progress - SHOT_MOMENT|; this constant is shared by the source and
  * the wordmark so they can never desync (see hero/useScrub.ts). */
 export const SHOT_MOMENT = 0.35;
+
+// ---------------------------------------------------------------------------
+// Off-frame origin (Revision 2). The shot comes from ONE consistent point
+// just outside a single edge of the hero -- NO weapon is ever drawn. Every
+// motivated element (directional light spill, ballistic casing, drifting
+// smoke, and the wordmark impact point) references these so "something fired
+// off-screen to the left, at barrel height" reads consistently. Fractions are
+// of the hero field; ORIGIN_FX is negative == ~10% BEYOND the left edge.
+// ---------------------------------------------------------------------------
+
+/** Horizontal origin as a fraction of hero width; negative == off-frame left. */
+export const ORIGIN_FX = -0.1;
+/** Vertical origin ("barrel height") as a fraction of hero height. */
+export const ORIGIN_FY = 0.52;

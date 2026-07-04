@@ -173,9 +173,10 @@ export interface ScrubSource {
 - Scrub right/left advances/reverses smoothly; releasing the pointer
   mid-sequence parks briefly, then the sequence settles home and the
   wordmark visibly reassembles (Revision 2 idle rule).
-- The blast visibly originates from the rendered weapon silhouette;
-  a first-time viewer can say what fired. Scrub only engages inside
-  the inset active band.
+- The blast reads as fired from a consistent point just off-frame
+  (directional spill, casing entry, smoke all agree on the origin);
+  no weapon imagery is drawn. Scrub only engages inside the inset
+  active band.
 - Clicking a nav link/CTA leaves a fading bullet-hole/glass-crack at
   the click point without delaying navigation (and never under
   reduced motion).

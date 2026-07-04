@@ -1,15 +1,20 @@
-// /hero-lab dev playground -- docs/design/08-landing-hero.md.
+// /hero-lab dev playground -- docs/design/08-landing-hero.md (Revision 2).
 //
 // Self-contained (route registration is App.tsx's job, not this file). It
-// drives a source + the reactive Wordmark directly so the scrub, the idle
-// drift, the manual override, the source swap, and the fps guard can all be
-// inspected in isolation. It intentionally does NOT reuse <Hero/>: the lab
-// needs to reach inside the progress signal (override it, read fps) in a way
-// the production component deliberately hides.
+// drives a source + the reactive Wordmark directly so the scrub, the settle-
+// home drift, the manual override, the source swap, the fps guard, and the
+// NEW Revision-2 tunables (active-band inset, settle duration, impact point)
+// can all be inspected and tuned in isolation. It also hosts a bullet-hole
+// test area. It intentionally does NOT reuse <Hero/>: the lab needs to reach
+// inside the progress signal (override it, read fps) in a way the production
+// component deliberately hides.
 
 import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "./Wordmark";
 import { useScrub } from "./useScrub";
+import { useBulletholeClicks } from "./useBulletholeClicks";
+import { DEFAULT_BAND_INSET, DEFAULT_SETTLE_MS } from "./scrubMachine";
+import { DEFAULT_IMPACT_FX, DEFAULT_IMPACT_FY } from "./shards";
 import type { ScrubSource } from "./timeline";
 import {
   createHeroSource,
@@ -29,8 +34,16 @@ export function HeroLab() {
   const [manual, setManual] = useState(0.35);
   const [status, setStatus] = useState("initializing");
 
-  const scrub = useScrub(containerRef, { enabled: !override });
+  // Revision-2 tunables.
+  const [bandInset, setBandInset] = useState(DEFAULT_BAND_INSET);
+  const [settleMs, setSettleMs] = useState(DEFAULT_SETTLE_MS);
+  const [impactFx, setImpactFx] = useState(DEFAULT_IMPACT_FX);
+  const [impactFy, setImpactFy] = useState(DEFAULT_IMPACT_FY);
+
+  const scrub = useScrub(containerRef, { enabled: !override, bandInset, settleMs });
   const progress = override ? manual : scrub.progress;
+
+  const bullets = useBulletholeClicks();
 
   // (Re)initialize the selected source whenever the kind changes.
   useEffect(() => {
@@ -68,10 +81,12 @@ export function HeroLab() {
     };
   }, [sourceKind]);
 
-  // Redraw on every progress change (pointer, drift, or manual override).
+  // Redraw on every progress change (pointer, settle, or manual override).
   useEffect(() => {
     sourceRef.current?.render(progress);
   }, [progress]);
+
+  const row = { display: "flex", gap: 8, alignItems: "center" } as const;
 
   return (
     <div style={{ background: "#0A0A0B", color: "#F4F4F2", padding: 24, minHeight: "100vh" }}>
@@ -102,7 +117,12 @@ export function HeroLab() {
             pointerEvents: "none",
           }}
         >
-          <Wordmark progress={progress} className="hero-lab-wordmark" />
+          <Wordmark
+            progress={progress}
+            impactFx={impactFx}
+            impactFy={impactFy}
+            className="hero-lab-wordmark"
+          />
         </div>
       </div>
 
@@ -117,12 +137,14 @@ export function HeroLab() {
       >
         <div>status: {status}</div>
         <div>progress: {progress.toFixed(4)}</div>
-        <div>mode: {override ? "manual override" : scrub.isIdleDrifting ? "idle drift" : "pointer"}</div>
+        <div>
+          mode: {override ? "manual override" : scrub.isSettling ? "settle-home" : scrub.mode}
+        </div>
         <div>
           fps: {scrub.fps.toFixed(1)} {scrub.lowPower ? "(LOW POWER)" : ""}
         </div>
 
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <label style={row}>
           source:
           <select
             value={sourceKind}
@@ -133,7 +155,7 @@ export function HeroLab() {
           </select>
         </label>
 
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <label style={row}>
           <input
             type="checkbox"
             checked={override}
@@ -142,7 +164,7 @@ export function HeroLab() {
           manual progress override
         </label>
 
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <label style={row}>
           <input
             type="range"
             min={0}
@@ -155,7 +177,94 @@ export function HeroLab() {
           />
           {manual.toFixed(3)}
         </label>
+
+        <hr style={{ borderColor: "#333", width: "100%" }} />
+        <div style={{ opacity: 0.7 }}>-- Revision 2 tunables --</div>
+
+        <label style={row}>
+          band inset (min 0.15):
+          <input
+            type="range"
+            min={0.15}
+            max={0.4}
+            step={0.005}
+            value={bandInset}
+            onChange={(e) => setBandInset(Number(e.target.value))}
+            style={{ flex: 1 }}
+          />
+          {bandInset.toFixed(3)}
+        </label>
+
+        <label style={row}>
+          settle ms (4000-6000):
+          <input
+            type="range"
+            min={4000}
+            max={6000}
+            step={100}
+            value={settleMs}
+            onChange={(e) => setSettleMs(Number(e.target.value))}
+            style={{ flex: 1 }}
+          />
+          {settleMs}
+        </label>
+
+        <label style={row}>
+          impact x:
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.005}
+            value={impactFx}
+            onChange={(e) => setImpactFx(Number(e.target.value))}
+            style={{ flex: 1 }}
+          />
+          {impactFx.toFixed(3)}
+        </label>
+
+        <label style={row}>
+          impact y:
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.005}
+            value={impactFy}
+            onChange={(e) => setImpactFy(Number(e.target.value))}
+            style={{ flex: 1 }}
+          />
+          {impactFy.toFixed(3)}
+        </label>
+
+        <hr style={{ borderColor: "#333", width: "100%" }} />
+        <div style={{ opacity: 0.7 }}>-- bullet-hole test area --</div>
+        <div style={row}>
+          <button
+            type="button"
+            {...bullets.bulletProps}
+            style={{
+              padding: "10px 18px",
+              background: "#E8112D",
+              color: "#F4F4F2",
+              border: "none",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            SHOOT ME
+          </button>
+          <a
+            href="#"
+            {...bullets.bulletProps}
+            onClick={(e) => e.preventDefault()}
+            style={{ color: "#F4F4F2" }}
+          >
+            or this link
+          </a>
+        </div>
       </div>
+      {bullets.overlay}
     </div>
   );
 }

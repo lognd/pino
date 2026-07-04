@@ -2,13 +2,20 @@ import { describe, it, expect } from "vitest";
 import {
   initialScrubState,
   step,
+  bandProgress,
   IDLE_THRESHOLD_MS,
   BLEND_MS,
+  DEFAULT_SETTLE_MS,
+  TOUCH_INTRO_MS,
   type ScrubMachineState,
 } from "../../src/hero/scrubMachine";
+import { SHOT_MOMENT } from "../../src/hero/timeline";
 
 // docs/design/12-testing-strategy.md's frontend unit obligations: "scrub
-// easing/idle state machine + shard purity (08)".
+// easing/idle state machine + shard purity (08)". Revision 2 rules encoded
+// here: inner active band clamping, settle-home (both sides of SHOT_MOMENT),
+// blend-back, and the touch one-shot. The old ping-pong drift test is gone --
+// that behaviour was replaced and would now contradict settle-home.
 
 const FRAME = 16; // ~60fps tick
 
@@ -25,8 +32,31 @@ function run(
   return s;
 }
 
-describe("hero/scrubMachine.ts", () => {
-  it("maps cursor position at the left/right edges to progress 0/1", () => {
+describe("hero/scrubMachine.ts bandProgress (inner active band)", () => {
+  it("clamps outside the band to 0/1 and is linear inside", () => {
+    const inset = 0.2;
+    // Left of the band -> 0.
+    expect(bandProgress(0, inset)).toBe(0);
+    expect(bandProgress(0.1, inset)).toBe(0);
+    expect(bandProgress(inset, inset)).toBeCloseTo(0, 6);
+    // Right of the band -> 1.
+    expect(bandProgress(1, inset)).toBe(1);
+    expect(bandProgress(0.9, inset)).toBe(1);
+    expect(bandProgress(1 - inset, inset)).toBeCloseTo(1, 6);
+    // Centre of the band -> 0.5, linear across it.
+    expect(bandProgress(0.5, inset)).toBeCloseTo(0.5, 6);
+  });
+
+  it("respects a wider inset (band shrinks toward centre)", () => {
+    expect(bandProgress(0.3, 0.3)).toBeCloseTo(0, 6);
+    expect(bandProgress(0.7, 0.3)).toBeCloseTo(1, 6);
+    expect(bandProgress(0.8, 0.3)).toBe(1); // beyond the band clamps hard
+    expect(bandProgress(0.5, 0.3)).toBeCloseTo(0.5, 6);
+  });
+});
+
+describe("hero/scrubMachine.ts step", () => {
+  it("maps band edges to progress 0/1 through the active band", () => {
     const left = run(initialScrubState(), 800, 0);
     expect(left.progress).toBeLessThan(0.02);
 
@@ -37,17 +67,12 @@ describe("hero/scrubMachine.ts", () => {
   it("chases the target with eased, monotonic progress and no overshoot", () => {
     let s = initialScrubState();
     let prev = s.progress;
-    let ticks = 0;
-    // Hold pointer hard right; progress must rise monotonically toward 1
-    // and never exceed the target (no overshoot).
     for (let t = 0; t < 500; t += FRAME) {
       s = step(s, { pointerX: 1, dtMs: FRAME });
       expect(s.progress).toBeGreaterThanOrEqual(prev - 1e-9);
       expect(s.progress).toBeLessThanOrEqual(1 + 1e-9);
       prev = s.progress;
-      ticks++;
     }
-    expect(ticks).toBeGreaterThan(0);
   });
 
   it("settles to within a few percent of target inside ~350ms", () => {
@@ -56,7 +81,7 @@ describe("hero/scrubMachine.ts", () => {
   });
 
   it("micro-jitter near a point produces negligible visible movement", () => {
-    // Park near the middle, then jitter a hair around it.
+    // Park mid-band, then jitter a hair around it (all inside the band).
     let s = run(initialScrubState(), 600, 0.5);
     const parked = s.progress;
     for (let t = 0; t < 100; t += FRAME) {
@@ -65,43 +90,72 @@ describe("hero/scrubMachine.ts", () => {
     expect(Math.abs(s.progress - parked)).toBeLessThan(0.01);
   });
 
-  it("drifts forward at ~1/20 speed after 3s idle", () => {
-    // Establish pointer control at start, then go idle (pointerX null).
-    let s = run(initialScrubState(), 200, 0);
-    s = run(s, IDLE_THRESHOLD_MS + 200, null); // cross the idle threshold
-    expect(s.mode).toBe("drift");
-    const before = s.progress;
-    s = run(s, 1000, null); // 1s of drift ~= 1/20 progress
-    const delta = s.progress - before;
-    expect(delta).toBeGreaterThan(0.02);
-    expect(delta).toBeLessThan(0.09);
+  it("settles HOME to 0 when idle below SHOT_MOMENT", () => {
+    // pointerX 0.35 with default inset 0.2 -> progress ~0.25 (< SHOT_MOMENT).
+    let s = run(initialScrubState(), 900, 0.35);
+    expect(s.progress).toBeLessThan(SHOT_MOMENT);
+    s = run(s, IDLE_THRESHOLD_MS + 100, null); // cross idle threshold -> settle
+    expect(s.mode).toBe("settle");
+    expect(s.settleTo).toBe(0);
+    s = run(s, DEFAULT_SETTLE_MS + 600, null); // ease all the way home
+    expect(s.progress).toBeLessThan(0.02);
   });
 
-  it("ping-pongs: reverses direction after reaching the end while idle", () => {
-    let s = run(initialScrubState(), 200, 1); // park near the end
-    s = run(s, IDLE_THRESHOLD_MS + 100, null); // go idle -> drift forward
-    s = run(s, 3000, null); // hit the end and bounce back
-    expect(s.driftDir).toBe(-1);
-    expect(s.progress).toBeLessThan(1);
+  it("settles HOME to 1 when idle above SHOT_MOMENT", () => {
+    // pointerX 0.6 with default inset 0.2 -> progress ~0.67 (> SHOT_MOMENT).
+    let s = run(initialScrubState(), 900, 0.6);
+    expect(s.progress).toBeGreaterThan(SHOT_MOMENT);
+    s = run(s, IDLE_THRESHOLD_MS + 100, null);
+    expect(s.mode).toBe("settle");
+    expect(s.settleTo).toBe(1);
+    s = run(s, DEFAULT_SETTLE_MS + 600, null);
+    expect(s.progress).toBeGreaterThan(0.98);
   });
 
-  it("blends pointer control back in over ~500ms after idle drift", () => {
-    let s = run(initialScrubState(), 200, 0);
-    s = run(s, IDLE_THRESHOLD_MS + 500, null); // drift forward a while
-    // Pointer returns to the far right: enters blend, not a snap.
-    s = step(s, { pointerX: 1, dtMs: FRAME });
+  it("settles home immediately when the pointer leaves the hero", () => {
+    let s = run(initialScrubState(), 900, 0.6); // parked above SHOT
+    s = step(s, { pointerX: null, dtMs: FRAME, pointerLeft: true });
+    expect(s.mode).toBe("settle");
+    expect(s.settleTo).toBe(1);
+  });
+
+  it("does NOT ping-pong: once home it rests at the extreme", () => {
+    let s = run(initialScrubState(), 900, 0.6); // above SHOT -> settles to 1
+    s = run(s, IDLE_THRESHOLD_MS + DEFAULT_SETTLE_MS + 2000, null);
+    // Long after arriving it stays put at 1 (no reversal, no drift back down).
+    expect(s.mode).toBe("settle");
+    expect(s.progress).toBeGreaterThan(0.98);
+    const later = run(s, 3000, null);
+    expect(Math.abs(later.progress - s.progress)).toBeLessThan(1e-3);
+  });
+
+  it("blends pointer control back in over ~500ms after settle-home", () => {
+    let s = run(initialScrubState(), 300, 0.35); // park in band (progress ~0.25)
+    s = run(s, IDLE_THRESHOLD_MS + 500, null); // settle home a while
+    // Pointer returns to the far right of the band: enters blend, not a snap.
+    s = step(s, { pointerX: 0.9, dtMs: FRAME });
     expect(s.mode).toBe("blend");
-    const midway = step(s, { pointerX: 1, dtMs: FRAME });
-    expect(midway.progress).toBeLessThan(1); // no instant snap to 1
-    // After the full blend window it is pointer-controlled again.
-    const done = run(midway, BLEND_MS + 200, 1);
+    const midway = step(s, { pointerX: 0.9, dtMs: FRAME });
+    expect(midway.progress).toBeLessThan(1); // no instant snap
+    const done = run(midway, BLEND_MS + 200, 0.9);
     expect(done.mode).toBe("pointer");
     expect(done.progress).toBeGreaterThan(0.95);
   });
 
+  it("touch one-shot: plays a single slow 0 -> 1 settle-through, ignoring the pointer", () => {
+    let s = initialScrubState({ touch: true });
+    expect(s.mode).toBe("touch");
+    // Even with the pointer pinned left, touch mode ignores it and climbs.
+    const mid = run(s, TOUCH_INTRO_MS / 2, 0);
+    expect(mid.progress).toBeGreaterThan(0.2);
+    expect(mid.progress).toBeLessThan(0.95);
+    s = run(mid, TOUCH_INTRO_MS, 0);
+    expect(s.mode).toBe("touch");
+    expect(s.progress).toBeGreaterThan(0.98); // rests whole at 1
+  });
+
   it("trips the low-power guard after two consecutive sub-30fps seconds", () => {
     let s = initialScrubState();
-    // ~10fps => 100ms frames. Two seconds of that must latch belowThreshold.
     for (let t = 0; t < 2500; t += 100) {
       s = step(s, { pointerX: 0.5, dtMs: 100 });
     }

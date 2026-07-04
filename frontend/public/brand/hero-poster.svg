@@ -2,20 +2,35 @@
 <!--
   Static hero poster (docs/design/08-landing-hero.md rungs 1/2/4): the
   first frame that paints, and the reduced-motion / pre-init / low-power
-  fallback. Black field, a faint red muzzle bloom, the whole MEL PINO
-  lockup. Strictly the doc 09 palette (#000000 / #F4F4F2 / #E8112D).
-  PLACEHOLDER glyphs pending the traced asset -- see README.md.
+  fallback. Black field, a DIRECTIONAL light spill raking in from the
+  off-frame origin just past the LEFT edge at barrel height (Revision 2 --
+  no weapon drawn), a vignette, and the WHOLE MEL PINO lockup. Strictly the
+  doc 09 palette (#000000 / #F4F4F2 / #E8112D). PLACEHOLDER glyphs pending
+  the traced asset -- see README.md.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 480" role="img" aria-label="Mel Pino">
   <defs>
-    <radialGradient id="poster-bloom" cx="34%" cy="52%" r="42%">
-      <stop offset="0%" stop-color="#E8112D" stop-opacity="0.55" />
-      <stop offset="45%" stop-color="#E8112D" stop-opacity="0.18" />
+    <!-- Directional spill: brightest at the left (origin) edge, raking right. -->
+    <linearGradient id="poster-spill" x1="0" y1="0" x2="768" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F4F4F2" stop-opacity="0.42" />
+      <stop offset="12%" stop-color="#E8112D" stop-opacity="0.34" />
+      <stop offset="45%" stop-color="#E8112D" stop-opacity="0.08" />
       <stop offset="100%" stop-color="#E8112D" stop-opacity="0" />
+    </linearGradient>
+    <!-- Hot core hugging the origin edge at barrel height (y ~ 52%). -->
+    <radialGradient id="poster-core" cx="0%" cy="52%" r="26%">
+      <stop offset="0%" stop-color="#F4F4F2" stop-opacity="0.55" />
+      <stop offset="40%" stop-color="#E8112D" stop-opacity="0.28" />
+      <stop offset="100%" stop-color="#E8112D" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="poster-vignette" cx="50%" cy="50%" r="72%">
+      <stop offset="55%" stop-color="#000000" stop-opacity="0" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.55" />
     </radialGradient>
   </defs>
   <rect x="0" y="0" width="1280" height="480" fill="#000000" />
-  <rect x="0" y="0" width="1280" height="480" fill="url(#poster-bloom)" />
+  <rect x="0" y="0" width="1280" height="480" fill="url(#poster-spill)" />
+  <rect x="0" y="0" width="1280" height="480" fill="url(#poster-core)" />
   <g transform="translate(280 300) skewX(-9)">
     <text
       x="0"
@@ -38,4 +53,5 @@
       fill="#F4F4F2"
     >PINO</text>
   </g>
+  <rect x="0" y="0" width="1280" height="480" fill="url(#poster-vignette)" />
 </svg>

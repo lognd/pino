@@ -4,12 +4,14 @@
 
 import { CONTENT } from "../../../content/mock";
 import { usePageMeta } from "../../layout/PageMeta";
+import { buildLocalBusinessJsonLd } from "../../../lib/jsonld";
 
 export function Contact() {
   usePageMeta({
     title: CONTENT.meta.contact.title,
     description: CONTENT.meta.contact.description,
     path: "/contact",
+    jsonLd: buildLocalBusinessJsonLd(CONTENT.contact),
   });
 
   return (

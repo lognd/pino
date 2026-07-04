@@ -15,6 +15,7 @@ import { Link } from "react-router-dom";
 import { businessShortName } from "../../../lib/brand";
 import { CONTENT } from "../../../content/mock";
 import { usePageMeta } from "../../layout/PageMeta";
+import { buildLocalBusinessJsonLd } from "../../../lib/jsonld";
 
 // Named export -> default via .then(), so this works whether or not
 // src/hero/Hero.tsx ever grows a default export of its own.
@@ -35,6 +36,7 @@ export function Landing() {
     title: CONTENT.meta.landing.title,
     description: CONTENT.meta.landing.description,
     path: "/",
+    jsonLd: buildLocalBusinessJsonLd(CONTENT.contact),
   });
 
   return (

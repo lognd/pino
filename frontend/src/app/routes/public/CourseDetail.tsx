@@ -6,6 +6,7 @@
 import { Link, useParams } from "react-router-dom";
 import { CONTENT } from "../../../content/mock";
 import { usePageMeta } from "../../layout/PageMeta";
+import { buildCourseJsonLd } from "../../../lib/jsonld";
 
 export function CourseDetail() {
   const { slug } = useParams<{ slug: string }>();
@@ -15,6 +16,7 @@ export function CourseDetail() {
     title: course ? `${course.name} -- Courses` : "Class not found",
     description: course ? course.shortDescription : "SAMPLE -- We could not find that class.",
     path: `/courses/${slug ?? ""}`,
+    jsonLd: course ? buildCourseJsonLd(course) : undefined,
   });
 
   if (!course) {

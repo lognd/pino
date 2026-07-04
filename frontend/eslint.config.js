@@ -23,5 +23,19 @@ export default [
     },
     settings: { react: { version: "detect" } },
   },
-  { ignores: ["dist/**", "node_modules/**"] },
+  {
+    // scripts/prerender.mjs (docs/design/10-seo-and-content.md's
+    // build-time sitemap/prerender step) runs under plain Node, not the
+    // browser/TS toolchain the rest of the config targets -- give it
+    // Node's globals instead of pulling in a whole `globals` package.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        URL: "readonly",
+      },
+    },
+  },
+  { ignores: ["dist/**", "dist-ssr/**", "node_modules/**"] },
 ];

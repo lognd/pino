@@ -5,7 +5,9 @@ Disallow: /admin/
 Disallow: /booking/
 Disallow: /pay/
 
-# TODO(seo): sitemap.xml itself is generated at build time from the known
-# public route list (docs/design/10-seo-and-content.md section 3) -- not
-# built yet; this Sitemap line points at where it will live.
+# sitemap.xml is generated at build time (scripts/prerender.mjs) from the
+# public route list (docs/design/10-seo-and-content.md section 3), based at
+# VITE_PUBLIC_BASE_URL. Domain is undecided (docs/design/00-overview.md open
+# question) -- this line uses the same https://example.com placeholder
+# default until a real domain lands; update both together if that changes.
 Sitemap: https://example.com/sitemap.xml

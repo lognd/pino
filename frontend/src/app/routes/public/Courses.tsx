@@ -3,12 +3,14 @@
 import { Link } from "react-router-dom";
 import { CONTENT } from "../../../content/mock";
 import { usePageMeta } from "../../layout/PageMeta";
+import { buildCourseJsonLd } from "../../../lib/jsonld";
 
 export function Courses() {
   usePageMeta({
     title: CONTENT.meta.courses.title,
     description: CONTENT.meta.courses.description,
     path: "/courses",
+    jsonLd: CONTENT.courses.map(buildCourseJsonLd),
   });
 
   return (

@@ -1,10 +1,12 @@
-// Per-route <title>/description/canonical/OG/Twitter updates --
+// Per-route <title>/description/canonical/OG/Twitter/JSON-LD updates --
 // docs/design/10-seo-and-content.md section 3. Patches document.title and
 // the meta tags that already exist as literal defaults in index.html (see
-// that file's own comment) so each route overrides them client-side. Real
-// build-time prerendering is a later SEO task (see index.html's TODO);
-// until then this hook is what makes each route's <title> and description
-// distinct for a JS-executing crawler and for the browser tab.
+// that file's own comment) so each route overrides them client-side. This
+// is the client-side (JS-executing crawler / browser tab) half of SEO
+// metadata; scripts/prerender.mjs's entry-server.tsx duplicates the same
+// title/description/JSON-LD values at build time (via the same
+// content/mock.ts + lib/jsonld.ts sources) so a non-JS-executing crawler
+// sees identical metadata in the prerendered static HTML.
 
 import { useEffect } from "react";
 
@@ -12,6 +14,26 @@ export interface PageMetaInput {
   title: string;
   description: string;
   path: string;
+  /** Structured-data object(s) for this route (see lib/jsonld.ts). Each is
+   * rendered into its own <script type="application/ld+json"> tag, tagged
+   * with data-managed-jsonld so stale tags are cleared on route change. */
+  jsonLd?: object | object[];
+}
+
+const JSONLD_MARKER_ATTR = "data-managed-jsonld";
+
+function clearManagedJsonLd(): void {
+  document.querySelectorAll(`script[${JSONLD_MARKER_ATTR}]`).forEach((node) => node.remove());
+}
+
+function appendJsonLd(entries: object[]): void {
+  for (const entry of entries) {
+    const script = document.createElement("script");
+    script.type = "application/ld+json";
+    script.setAttribute(JSONLD_MARKER_ATTR, "true");
+    script.textContent = JSON.stringify(entry);
+    document.head.appendChild(script);
+  }
 }
 
 function setMetaTag(attr: "name" | "property", key: string, content: string): void {
@@ -34,7 +56,7 @@ function setCanonical(href: string): void {
   link.setAttribute("href", href);
 }
 
-export function usePageMeta({ title, description, path }: PageMetaInput): void {
+export function usePageMeta({ title, description, path, jsonLd }: PageMetaInput): void {
   useEffect(() => {
     document.title = title;
     setMetaTag("name", "description", description);
@@ -48,5 +70,10 @@ export function usePageMeta({ title, description, path }: PageMetaInput): void {
     const url = `${origin}${path}`;
     setMetaTag("property", "og:url", url);
     setCanonical(url);
-  }, [title, description, path]);
+
+    clearManagedJsonLd();
+    if (jsonLd) {
+      appendJsonLd(Array.isArray(jsonLd) ? jsonLd : [jsonLd]);
+    }
+  }, [title, description, path, jsonLd]);
 }

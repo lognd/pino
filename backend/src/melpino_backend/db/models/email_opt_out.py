@@ -4,7 +4,14 @@ from __future__ import annotations
 # per docs/design/03-database.md. CRIB: logand.app
 # backend/src/logand_backend/db/models -- logand tracks this as a User
 # column; melpino has no student accounts, so this is its own table keyed
-# by email instead (see domain/notifications/mailer.py's CRIB pointer).
+# by email instead.
+import uuid
+from datetime import datetime
+
+from sqlalchemy import DateTime, Text, func
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
 from melpino_backend.db.base import Base
 
 
@@ -12,9 +19,11 @@ class EmailOptOut(Base):
     """An email address that has unsubscribed from notification emails."""
 
     __tablename__ = "email_opt_out"
-    # TEMPORARY: no columns exist yet, so SQLAlchemy has no
-    # primary key to map -- __abstract__ keeps this importable as a
-    # plain placeholder class. Remove once real columns land.
-    __abstract__ = True
-    # TODO(impl): columns per docs/design/03 -- id, email unique,
-    # opted_out_at
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    email: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    opted_out_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

@@ -4,17 +4,42 @@ from __future__ import annotations
 # `students` table. Deduped on (lower(email), lower(full_name)) at booking
 # time by domain/students/service.py; no DOB/SSN/license numbers, ever
 # (see docs/design/02-auth-and-security.md and 06-waivers-and-legal.md).
+import uuid
+from datetime import datetime
+
+from sqlalchemy import DateTime, Index, Text, func, text
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
 from melpino_backend.db.base import Base
 
 
 class Student(Base):
-    """A booker/attendee -- name, email, phone, admin-only notes."""
+    """A booker/attendee -- name, email, phone, admin-only notes.
+
+    `email` is deliberately NOT unique -- households book together and
+    share an inbox; dedup happens in the booking-time service layer, not
+    at the schema level.
+    """
 
     __tablename__ = "students"
-    # TEMPORARY: no columns exist yet, so SQLAlchemy has no
-    # primary key to map -- __abstract__ keeps this importable as a
-    # plain placeholder class. Remove once real columns land.
-    __abstract__ = True
-    # TODO(impl): columns per docs/design/03 -- id, full_name, email
-    # (not unique -- households share), phone, notes, created_at/
-    # updated_at, index lower(email)
+    __table_args__ = (
+        # Dedup lookup -- see docs/design/03's "Indexes worth declaring
+        # up front".
+        Index("ix_students_lower_email", text("lower(email)")),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    full_name: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    phone: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # Admin-only, never shown publicly.
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

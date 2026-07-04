@@ -3,6 +3,13 @@ from __future__ import annotations
 # Admin password-reset tokens -- copied unchanged in shape from
 # logand.app per docs/design/03-database.md. CRIB: logand.app
 # backend/src/logand_backend/db/models/password_reset_tokens.py.
+import uuid
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Text, func
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
 from melpino_backend.db.base import Base
 
 
@@ -10,9 +17,25 @@ class PasswordResetToken(Base):
     """A single-use, hashed, time-limited admin password-reset token."""
 
     __tablename__ = "password_reset_tokens"
-    # TEMPORARY: no columns exist yet, so SQLAlchemy has no
-    # primary key to map -- __abstract__ keeps this importable as a
-    # plain placeholder class. Remove once real columns land.
-    __abstract__ = True
-    # TODO(impl): columns per docs/design/03 -- id, user_id fk, token_hash
-    # unique, expires_at, used_at, created_at
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    # sha256(raw_token), never the raw token itself -- same discipline as
+    # sessions.Session.token_hash.
+    token_hash: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    # None until the token is actually redeemed -- single-use, unlike a
+    # session token, so a captured-but-already-used token can never be
+    # replayed even within its TTL.
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

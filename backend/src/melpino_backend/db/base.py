@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
+    create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
 
@@ -27,21 +28,42 @@ _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
 def init_engine(database_url: str) -> AsyncEngine:
     """Creates the process-wide async engine + sessionmaker."""
-    raise NotImplementedError("see docs/design/03-database.md")  # TODO(impl)
+    global _engine, _sessionmaker
+    _engine = create_async_engine(database_url, pool_pre_ping=True)
+    _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False)
+    return _engine
 
 
 async def dispose_engine() -> None:
     """Disposes the process-wide engine; safe to call if never initialized."""
-    raise NotImplementedError("see docs/design/03-database.md")  # TODO(impl)
+    global _engine, _sessionmaker
+    if _engine is not None:
+        await _engine.dispose()
+    _engine = None
+    _sessionmaker = None
 
 
 async def get_db() -> AsyncGenerator[AsyncSession]:
     """FastAPI dependency: yields one session per request, rolled back on error."""
-    raise NotImplementedError("see docs/design/03-database.md")  # TODO(impl)
-    yield  # pragma: no cover -- unreachable until implemented
+    if _sessionmaker is None:
+        raise RuntimeError("init_engine() must be called before get_db() is used")
+    async with _sessionmaker() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
 
 
 def get_session() -> AsyncSession:
-    """For standalone scripts (scripts/scheduler.py) needing a real
-    session outside FastAPI's own request lifecycle."""
-    raise NotImplementedError("see docs/design/03-database.md")  # TODO(impl)
+    """For standalone scripts (scripts/scheduler.py) needing a real session
+    outside FastAPI's own request lifecycle -- get_db() above is a
+    dependency GENERATOR meant to be driven by FastAPI's own request
+    lifecycle (`async for` / `Depends`), not something a plain script calls
+    directly. This is just `_sessionmaker()` itself, exposed as a real
+    public function instead of every caller reaching into the module's
+    private `_sessionmaker` global."""
+    if _sessionmaker is None:
+        raise RuntimeError("init_engine() must be called before get_session() is used")
+    return _sessionmaker()

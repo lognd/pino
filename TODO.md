@@ -51,16 +51,19 @@ implementing; docs win over guesses.
 
 ## P2 -- Backend skeleton (docs/design/01, 02, 03)
 
-- [ ] logging/ module (refs/logging.md + logand's json/rotation extras)
-- [ ] AppConfig + App + asgi + __main__ (copy patterns, melpino fields)
-- [ ] errors.py ErrorSets + api/errors.py status map (fail-fast check)
-- [ ] db/base.py + models + 0000_initial_schema migration (03)
-- [ ] auth/: passwords, sessions, csrf, rate_limit (copy logand),
+- [x] logging/ module (refs/logging.md + logand's json/rotation extras)
+- [x] AppConfig + App + asgi + __main__ (copy patterns, melpino fields)
+- [x] errors.py ErrorSets + api/errors.py status map (fail-fast check)
+- [x] db/base.py + models + 0000_initial_schema migration (03)
+- [x] auth/: passwords, sessions, csrf, rate_limit (copy logand),
       booking_tokens (new, per 02)
-- [ ] api/health + api/auth + api/config_public
-- [ ] Admin seed lifespan hook; docker-compose.dev.yml verified
-- [ ] Migration round-trip integration test green
-- [ ] GATE: backend `make check` green with real (non-skip) P2 tests
+- [x] api/health + api/auth + api/config_public
+- [x] Admin seed lifespan hook; docker-compose.dev.yml verified
+      (contract verified via plain docker run w/ the file's exact
+      image/env/port -- no compose plugin on this host)
+- [x] Migration round-trip integration test green (testcontainers)
+- [x] GATE: backend `make check` green with real (non-skip) P2 tests
+      (remaining skips are P3/P4/P5 booking/payments/waivers stubs)
 
 ## P3 -- Booking domain (docs/design/04; THE core)
 
@@ -85,6 +88,10 @@ implementing; docs win over guesses.
 - [ ] Manual payment recording endpoint (admin)
 - [ ] melpinoinvoice.cls letterhead w/ business_legal_name
 - [ ] Payment idempotency/tamper/race tests copied + green
+- [ ] Fix AppConfig.payment_processor_secret default ("sk_test_fake"
+      makes /api/config report stripe:true when nothing is
+      configured -- flagged during P2; decide None-means-unconfigured
+      semantics like paypal's)
 - [ ] GATE: deposit journey green end-to-end vs fake-stripe
 
 ## P5 -- Waivers + legal surface (docs/design/06)

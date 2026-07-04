@@ -5,12 +5,18 @@ disable_existing_loggers = false
 "()" = "melpino_backend.logging.filter.BelowLevelFilter"
 below = "WARNING"
 
+[filters.request_id]
+"()" = "melpino_backend.logging.request_context.RequestIdFilter"
+
 [formatters.stdout_fmt]
 "()" = "melpino_backend.logging.formatter.MalmbergFormatter"
 
 [formatters.stderr_fmt]
 "()" = "melpino_backend.logging.formatter.MalmbergFormatter"
 show_level = true
+
+[formatters.json_line]
+"()" = "melpino_backend.logging.json_formatter.JsonLineFormatter"
 
 [handlers.stdout]
 class = "logging.StreamHandler"
@@ -25,6 +31,26 @@ formatter = "stderr_fmt"
 stream = "ext://sys.stderr"
 level = "WARNING"
 
+# filename is a placeholder here so the config is valid TOML/dictConfig on
+# its own (e.g. under a tool that only parses it); logger.py is expected to
+# patch it in at runtime from an env-driven LOG_DIR, mirroring logand.app's
+# pattern. when="midnight" + utc=true: one file per UTC calendar day, so
+# retention.py's exponential pruning (daily/weekly/monthly buckets) has a
+# stable, unambiguous file-per-day to reason about regardless of what
+# timezone the host machine is in. backupCount=0 -- this handler does NOT
+# self-delete old files; retention.py is solely responsible for pruning, so
+# there is exactly one place that decides what old logs are worth keeping.
+[handlers.file]
+class = "melpino_backend.logging.handler.SizeCappedTimedRotatingFileHandler"
+formatter = "json_line"
+filters = ["request_id"]
+filename = "./logs/app.log"
+when = "midnight"
+utc = true
+backupCount = 0
+maxBytes = 20971520
+level = "DEBUG"
+
 [root]
 level = "DEBUG"
-handlers = ["stdout", "stderr"]
+handlers = ["stdout", "stderr", "file"]

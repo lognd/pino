@@ -299,6 +299,21 @@ async def capture_paypal_order_endpoint(
         )
         await db.rollback()
         raise to_http_exception(InvoiceError.NotOwned)
+    if capture.captured_currency.lower() != invoice.currency.lower():
+        # PayPal-side currency auto-conversion or anomaly -- recording this
+        # capture's amount as if it were invoice.currency would silently
+        # corrupt get_paid_so_far's raw-sum math (see FINDINGS.md L2).
+        _log.warning(
+            "paypal capture currency mismatch -- refusing to record",
+            extra={
+                "invoice_id": str(invoice.id),
+                "order_id": order_id,
+                "invoice_currency": invoice.currency,
+                "captured_currency": capture.captured_currency,
+            },
+        )
+        await db.rollback()
+        raise to_http_exception(InvoiceError.AmountMismatch)
 
     payment_status = "succeeded" if capture.status == "COMPLETED" else "pending"
     try:

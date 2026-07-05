@@ -37,7 +37,7 @@ import {
 const BLACK = "#000000";
 const WHITE = "#F4F4F2";
 
-const SMOKE_COUNT = 6;
+const SMOKE_COUNT = 9;
 const GRAIN_TILE = 96;
 
 /** The selectable flash treatments (all exposure/rim, all within the guard). */
@@ -125,11 +125,13 @@ export function sceneParams(progress: number, variant: FlashVariant): SceneParam
     case "exposure":
     default:
       // Hard single-beat over-exposure lift, tight origin bloom, clean decay.
+      // Revision 5: less uniform full-field wash, more directional spill --
+      // the frame should blow out from the origin side, not go flat grey.
       return {
-        exposure: env * 0.55,
+        exposure: env * 0.4,
         bloom: env * 0.8,
         bloomRadius: 0.35 + 0.7 * env,
-        rim: rimEnv * 0.8,
+        rim: rimEnv * 1.05,
         smokeGlow: env * 0.4,
         smokeTravel,
         smokeAmount,
@@ -147,6 +149,7 @@ export class SimulatedSource implements ScrubSource {
   private readonly smokeAngle = new Float32Array(SMOKE_COUNT);
   private readonly smokeSpread = new Float32Array(SMOKE_COUNT);
   private readonly smokePhase = new Float32Array(SMOKE_COUNT);
+  private readonly smokeElong = new Float32Array(SMOKE_COUNT);
 
   // Pre-created gradients.
   private bloomGrad: CanvasGradient | null = null;
@@ -192,6 +195,8 @@ export class SimulatedSource implements ScrubSource {
       this.smokeAngle[i] = -0.5 + (hash01(i * 5 + 1) - 0.5) * 1.1;
       this.smokeSpread[i] = 0.4 + hash01(i * 5 + 2) * 0.6;
       this.smokePhase[i] = hash01(i * 5 + 3);
+      // Wisps are STRETCHED along their drift (1.6x-2.8x), never round puffs.
+      this.smokeElong[i] = 1.6 + hash01(i * 5 + 4) * 1.2;
     }
 
     if (ctx) {
@@ -200,7 +205,8 @@ export class SimulatedSource implements ScrubSource {
       const bloom = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
       bloom.addColorStop(0, "rgba(244,244,242,0.85)");
       bloom.addColorStop(0.25, "rgba(244,244,242,0.32)");
-      bloom.addColorStop(0.5, "rgba(232,17,45,0.18)");
+      bloom.addColorStop(0.45, "rgba(236,60,80,0.1)");
+      bloom.addColorStop(0.75, "rgba(232,17,45,0.04)");
       bloom.addColorStop(1, "rgba(232,17,45,0)");
       this.bloomGrad = bloom;
       // White-hot core with inverse-square-ish falloff (collapses fast).
@@ -312,17 +318,20 @@ export class SimulatedSource implements ScrubSource {
     const bloom = s.bloom * flashScale;
     if (bloom > 0.005 && this.bloomGrad && this.coreGrad) {
       const haloR = h * (0.4 + s.bloomRadius);
-      this.drawUnitGradient(ctx, this.bloomGrad, originX, originY, haloR, bloom * 0.9);
+      this.drawEllipse(ctx, this.bloomGrad, originX, originY, haloR, haloR, 0, bloom * 0.9);
       const coreRy = h * (0.1 + 0.3 * s.bloomRadius);
-      this.drawAnamorphic(ctx, this.coreGrad, originX, originY, coreRy * 2.2, coreRy, bloom);
+      this.drawEllipse(ctx, this.coreGrad, originX, originY, coreRy * 2.2, coreRy, 0, bloom);
       if (this.rimGrad && rim > 0.01) {
         const rimR = h * (0.22 + 0.4 * s.bloomRadius);
-        this.drawAnamorphic(ctx, this.rimGrad, originX, originY, rimR * 1.8, rimR, rim * 0.8);
+        this.drawEllipse(ctx, this.rimGrad, originX, originY, rimR * 1.8, rimR, 0, rim * 0.8);
       }
     }
 
-    // Smoke: soft puffs whose positions are FUNCTIONS of progress, drifting in
-    // from the origin edge; a brief atmospheric glow lifts them during the beat.
+    // Smoke: layered wisps whose positions are FUNCTIONS of progress, drifting
+    // in from the origin edge. Each wisp is two rotated, drift-elongated
+    // ellipses (a wide faint body plus a denser core trailing toward the
+    // origin) -- round grey puffs read as fog blobs, stretched layers read as
+    // gunsmoke. A brief atmospheric glow lifts them during the beat.
     if (s.smokeAmount > 0.001 && this.smokeGrad) {
       const glow = s.smokeGlow * flashScale;
       for (let i = 0; i < SMOKE_COUNT; i++) {
@@ -331,11 +340,32 @@ export class SimulatedSource implements ScrubSource {
         const dist = w * 0.5 * travel * this.smokeSpread[i];
         const sx = originX + Math.cos(a) * dist;
         const sy = originY + Math.sin(a) * dist;
-        const r = h * (0.1 + 0.32 * travel);
-        const alpha = s.smokeAmount * Math.sin(Math.PI * clamp01(travel));
-        // Near-origin puffs pick up the flash glow briefly.
+        const r = h * (0.09 + 0.3 * travel);
+        const life = Math.sin(Math.PI * clamp01(travel));
+        const alpha = s.smokeAmount * life * (0.35 + 0.4 * this.smokePhase[i]);
+        // Near-origin wisps pick up the flash glow briefly.
         const nearOrigin = 1 - clamp01(dist / (w * 0.4));
-        this.drawUnitGradient(ctx, this.smokeGrad, sx, sy, r, alpha + glow * nearOrigin * 0.4);
+        const elong = this.smokeElong[i];
+        this.drawEllipse(
+          ctx,
+          this.smokeGrad,
+          sx,
+          sy,
+          r * elong,
+          r * 0.6,
+          a * 0.7,
+          alpha * 0.7 + glow * nearOrigin * 0.35,
+        );
+        this.drawEllipse(
+          ctx,
+          this.smokeGrad,
+          sx - Math.cos(a) * r * 0.5,
+          sy - Math.sin(a) * r * 0.5,
+          r * elong * 0.45,
+          r * 0.4,
+          a,
+          alpha * 0.55 + glow * nearOrigin * 0.25,
+        );
       }
     }
 
@@ -360,33 +390,22 @@ export class SimulatedSource implements ScrubSource {
     ctx.globalAlpha = 1;
   }
 
-  private drawUnitGradient(
-    ctx: CanvasRenderingContext2D,
-    grad: CanvasGradient,
-    x: number,
-    y: number,
-    radius: number,
-    alpha: number,
-  ): void {
-    ctx.globalAlpha = clamp01(alpha);
-    ctx.setTransform(radius, 0, 0, radius, x, y);
-    ctx.fillStyle = grad;
-    ctx.fillRect(-1, -1, 2, 2);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = 1;
-  }
-
-  private drawAnamorphic(
+  /** Fill a unit radial gradient as an ellipse: radii rx/ry, rotated by
+   * `angle`, centered at (x, y). The one primitive every glow/wisp uses. */
+  private drawEllipse(
     ctx: CanvasRenderingContext2D,
     grad: CanvasGradient,
     x: number,
     y: number,
     rx: number,
     ry: number,
+    angle: number,
     alpha: number,
   ): void {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
     ctx.globalAlpha = clamp01(alpha);
-    ctx.setTransform(rx, 0, 0, ry, x, y);
+    ctx.setTransform(rx * cos, rx * sin, -ry * sin, ry * cos, x, y);
     ctx.fillStyle = grad;
     ctx.fillRect(-1, -1, 2, 2);
     ctx.setTransform(1, 0, 0, 1, 0, 0);

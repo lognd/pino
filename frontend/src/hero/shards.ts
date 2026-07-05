@@ -47,12 +47,15 @@ export const DEFAULT_IMPACT_FY = ORIGIN_FY;
 /** Base radial primaries before the four corner primaries are inserted. */
 const RAY_COUNT = 8;
 
-/** Max per-shard translation in SVG user units (viewBox is 640x240). */
-const MAX_TRANSLATE = 170;
-/** Max per-shard rotation at full shatter, degrees. */
-const MAX_ROTATE_DEG = 26;
-/** Opacity floor at full shatter (motion-blur-suggesting falloff). */
-const MIN_OPACITY = 0.42;
+/** Max per-shard translation in SVG user units (viewBox is 640x240).
+ * Revision 5: pulled in from 170 -- wide scatter read as confetti. */
+const MAX_TRANSLATE = 110;
+/** Max per-shard rotation at full shatter, degrees. Revision 5: 26 -> 9;
+ * heavy glass plates barely turn, cartoon shards spin. */
+const MAX_ROTATE_DEG = 9;
+/** Opacity floor at full shatter. Revision 5: 0.42 -> 0.8 -- deep fades
+ * overlapped into a double-exposure mush instead of reading as depth. */
+const MIN_OPACITY = 0.8;
 
 export type { Point };
 
@@ -303,7 +306,8 @@ export function shardTransform(progress: number, shard: Shard): ShardTransform {
   const reach = 1.0 - shard.distNorm * 0.5; // 1.0 (near) .. 0.5 (far).
 
   const spin = hash01(shard.seed * 3 + 1) * 2 - 1; // [-1, 1]
-  const scaleDelta = -0.08 + hash01(shard.seed * 3 + 2) * 0.14; // [-0.08, +0.06]
+  // Revision 5: +-3% scale only -- visible growth/shrink read as cartoon.
+  const scaleDelta = -0.03 + hash01(shard.seed * 3 + 2) * 0.06; // [-0.03, +0.03]
 
   const mag = MAX_TRANSLATE * reach * staggered;
   const tx = shard.dirX * mag;

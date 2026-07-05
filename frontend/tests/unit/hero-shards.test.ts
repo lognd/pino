@@ -121,13 +121,13 @@ describe("hero/shards.ts shardTransform", () => {
     expect(magOf(shardTransform(0.5, near))).toBeGreaterThan(magOf(shardTransform(0.5, far)));
   });
 
-  it("keeps opacity within [floor, 1] and scale within 0.92-1.06 at full shatter", () => {
+  it("keeps opacity near-solid and scale subtle at full shatter (Revision 5)", () => {
     for (const shard of SHARDS) {
       const t = shardTransform(1, shard);
-      expect(t.opacity).toBeGreaterThanOrEqual(0.41);
+      expect(t.opacity).toBeGreaterThanOrEqual(0.79);
       expect(t.opacity).toBeLessThanOrEqual(1);
-      expect(t.scale).toBeGreaterThanOrEqual(0.91);
-      expect(t.scale).toBeLessThanOrEqual(1.07);
+      expect(t.scale).toBeGreaterThanOrEqual(0.96);
+      expect(t.scale).toBeLessThanOrEqual(1.04);
     }
   });
 });

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from melpino_backend.db.models.bookings import Booking
 from melpino_backend.db.models.class_sessions import ClassSession
@@ -56,13 +57,33 @@ async def _already_sent(db: "AsyncSession", booking_id: UUID, kind: str) -> bool
 
 async def _record_sent(db: "AsyncSession", booking_id: UUID, kind: str) -> None:
     """Marks a (booking, kind) notification as sent -- the idempotency
-    ledger the daily sweep and transactional sends both consult."""
-    db.add(
-        ReminderSent(
-            booking_id=booking_id, kind=kind, sent_at=datetime.now(timezone.utc)
+    ledger the daily sweep and transactional sends both consult.
+
+    Wrapped in a SAVEPOINT: check-then-insert against the
+    uq_reminders_sent_booking_kind unique constraint is not atomic, so a
+    concurrent duplicate insert (two sweep runs racing the same booking)
+    can raise IntegrityError here. Without the SAVEPOINT that exception
+    poisons the whole AsyncSession, aborting every remaining booking in
+    the caller's loop -- see FINDINGS.md M2. Only this failed INSERT
+    rolls back; the caller treats the row as already-recorded and moves
+    on, same pattern as api/webhooks.py's Payment insert.
+    """
+    try:
+        async with db.begin_nested():
+            db.add(
+                ReminderSent(
+                    booking_id=booking_id,
+                    kind=kind,
+                    sent_at=datetime.now(timezone.utc),
+                )
+            )
+            await db.flush()
+    except IntegrityError:
+        _log.info(
+            "_record_sent: booking_id=%s kind=%s already recorded (concurrent)",
+            booking_id,
+            kind,
         )
-    )
-    await db.flush()
 
 
 async def _session_title(db: "AsyncSession", session_id: UUID) -> str:

@@ -59,6 +59,11 @@ async def find_or_create_student(
         winner = (await db.execute(stmt)).scalars().first()
         if winner is None:  # pragma: no cover - defensive, should be unreachable
             raise
+        # Keep the most recent phone the booker supplied, same as the
+        # non-racing path above -- otherwise the loser's freshly-supplied
+        # phone is silently dropped (see FINDINGS.md L3).
+        if phone and winner.phone != phone:
+            winner.phone = phone
         return winner
 
     logger.info("student dedup miss: created student_id=%s", student.id)

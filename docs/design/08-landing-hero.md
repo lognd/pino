@@ -208,6 +208,36 @@ SUPERHOT):
   init failures log and retry with backoff; rAF suspension gaps (>1s)
   are discarded by the fps guard instead of latching low-power.
 
+REVISION 7b (binding user feedback, 2026-07-05, third round):
+
+- **No reassembly jump.** While shatter is FALLING the sim goes
+  homing: stiffer spring, overdamped, wander silenced, offsets
+  contract exponentially -- ~0 by the instant separation ends.
+  Direction-aware so the instant float on the way out is untouched.
+- **Momentum field border, self-balancing shatter.** A soft repulsive
+  border (force ~ penetration, NO momentum reset) turns pieces back
+  into the field; separation kicks carry real radial momentum, the
+  spring tether is weak, roam room scales with shatter, base radial
+  translate trimmed to 85. The debris redistributes itself instead of
+  massing at the impact-opposite edge or leaving the render.
+- **Smoke rides the first pass** (SmokePass, timeline.ts): full on
+  the first forward traversal, wall-clock fade the moment the
+  sequence rewinds, latched out for the cycle, re-armed at home. The
+  flash's no-fire-on-rewind behavior is already right and will
+  simply invert when real slow-mo footage replaces the simulation.
+- **Poster = rest state.** The poster asset must NEVER depict the
+  shot: a baked-in light spill blinked a phantom muzzle flash on
+  every first load when the live black frame replaced it.
+- **Bullet hole order + speed:** the hole pops first (~70ms), cracks
+  RADIATE from it fast (80ms growth, seeded stagger), render box
+  larger than the damage so cracks never flat-clip at borders.
+- **Chrome:** the nav backlink logo is the inline StaticWordmark
+  (exact hero letters/webfont, uncracked -- an <img> SVG cannot use
+  the page font); carousel slides share one uniform 16/9 stage and
+  the "N of M" counter is upright (no skew); the landing page shows
+  a faint SCROLL hint over the hero's bottom edge (fades on first
+  scroll, reduced-motion still).
+
 ## Architecture: one interface, two sources (the swap contract)
 
 We do not have real footage yet. Simulate first; when Mel's real

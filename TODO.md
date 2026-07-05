@@ -203,6 +203,14 @@ implementing; docs win over guesses.
       disclosure below lg (no wrap/overlap; 48px targets; Escape and
       route-change close); hero capped at 85svh for short/ultrawide;
       audited 360/500/768/1280/2560 viewports (axe suite still green)
+- [x] Hero R7b (2026-07-05, third round): direction-aware homing (no
+      reassembly jump), momentum field border + radial kicks (self-
+      balancing shatter, no edge clipping), SmokePass (smoke rides the
+      first pass only), poster reworked to the REST state (killed the
+      first-load phantom flash), bullet hole re-sequenced (hole first,
+      fast radiating cracks, unclipped box), nav logo = inline
+      StaticWordmark (exact hero lockup), carousel uniform 16/9 stage
+      + upright counter, faint landing SCROLL hint. 186 unit green
 - [ ] HUMAN INPUT: pick flash variant in /hero-lab and carousel
       variant in /carousel-lab; confirm hero feel (energy rate, idle
       timer) on a real device

@@ -203,16 +203,17 @@ export function Hero() {
   return (
     <div
       ref={containerRef}
-      // max-h caps the box on short/ultrawide viewports so the hero never
-      // swallows the whole first screen; the ResizeObserver re-sizes the
-      // canvas backing store to whatever box results. Taller aspect below
-      // sm: the stacked two-row "MEL / PINO" mobile wordmark (Wordmark.tsx's
-      // `stacked` prop) needs vertical room the wide 8/3 box doesn't give it.
-      // Desktop widened from 8/3 to 16/9 once the nav started floating OVER
-      // the hero (Shell.tsx) instead of reserving its own bar above it --
-      // the hero no longer gets that ~80px pushed into it, so it needs more
-      // height of its own to still read as a full hero band, not a strip.
-      className="relative aspect-[3/4] max-h-[85svh] w-full overflow-hidden bg-mp-black-true sm:aspect-[16/9]"
+      // max-h caps the box on short/ultrawide viewports so the aspect ratio
+      // never forces it beyond one screen; the ResizeObserver re-sizes the
+      // canvas backing store to whatever box results. Full 100svh (not a
+      // partial value): the nav floats OVER the hero (Shell.tsx) rather than
+      // reserving its own bar above it, so anything short of a full screen
+      // here left the next section's heading visibly peeking in above the
+      // fold -- the "SCROLL" hint below is what signals more content, not a
+      // deliberately-visible sliver of it. Taller aspect below sm: the
+      // stacked two-row "MEL / PINO" mobile wordmark (Wordmark.tsx's
+      // `stacked` prop) needs vertical room the wide 16/9 box doesn't give it.
+      className="relative aspect-[3/4] max-h-[100svh] w-full overflow-hidden bg-mp-black-true sm:aspect-[16/9]"
       aria-hidden="true"
     >
       {/* Poster: the backdrop that paints first and the reduced-motion /

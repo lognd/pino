@@ -168,6 +168,46 @@ like a flash game" -- needs "professional and super polished"):
   ambience is a CSS-only drifting haze (doc rule "subtly alive at
   rest"), disabled under prefers-reduced-motion.
 
+REVISION 7 (binding user feedback, 2026-07-05, second round -- four
+asks: floating shards, cursor interactivity, letters-as-objects,
+SUPERHOT):
+
+- **LETTERS ARE OBJECTS.** "Visual disconnect = different object": a
+  crack cell that spans several glyphs must never move visually
+  disconnected fragments as one rigid body. Pieces = crack cells
+  intersected with per-letter glyph rects (Sutherland-Hodgman,
+  shards.ts buildPieces); each piece clips only its own letter's
+  artwork (measured once against the real webfont, baked in
+  Wordmark.tsx) and moves on its own seed/centroid/radial vector.
+- **BABY PHYSICS SIM (supersedes the short-lived Revision 6 sine
+  drift).** Separated pieces float from the FIRST frame of separation:
+  per-piece offset+velocity integration (piecePhysics.ts) with a
+  seeded kick on the separation edge, seeded wander force, a weak
+  spring toward the progress-driven base position, damping, and hard
+  offset/velocity bounds. Offsets snap to exact zero when no longer
+  separated, so the pixel-perfect reassembly contract at progress 0
+  is unchanged. Deterministic and DOM-free (unit-tested); state is
+  mutated in place, zero per-frame allocations.
+- **CURSOR-INTERACTIVE PIECES.** The pointer repels nearby separated
+  pieces (smooth quadratic falloff, radius ~95 viewBox units), acting
+  where pieces visibly are (base + offset). Wired through
+  WordmarkHandle.setPointer; one shared hook (useWordmarkPointer)
+  feeds it from Hero and /hero-lab.
+- **SUPERHOT TIME FLOW.** Scene/physics time advances only while the
+  viewer moves: timeFlowScale (scrubMachine.ts) maps smoothed energy
+  to [0,1], snapping to a HARD 0 below a small floor (the EMA only
+  asymptotes, and a 0.1% leak reads as drift, not freeze). Stillness
+  freezes the float mid-air; the settle/break/touch ramps run at full
+  time so the shot and the rejoin always animate. Idle-settle
+  threshold shortened 6s -> 4s (frozen time makes the wait read
+  longer); settle-home to 0 ("goes backward and rejoins") unchanged.
+- **Fallback hardening (same round, "it sometimes breaks").** The
+  wordmark overlay is ALWAYS mounted (rung 1 "poster + static
+  wordmark", literally) so a failed poster asset can never leave an
+  unbranded black hero; the poster <img> hides itself on error; source
+  init failures log and retry with backoff; rAF suspension gaps (>1s)
+  are discarded by the fps guard instead of latching low-power.
+
 ## Architecture: one interface, two sources (the swap contract)
 
 We do not have real footage yet. Simulate first; when Mel's real

@@ -7,6 +7,7 @@ import {
   TOUCH_INTRO_MS,
   BREAK_TARGET,
   ADVANCE_RATE_CAP,
+  timeFlowScale,
   BREAK_MS,
   type ScrubMachineState,
   type ScrubInput,
@@ -192,5 +193,26 @@ describe("hero/scrubMachine.ts fps guard suspension hygiene", () => {
     s = step(s, { dtMs: 30000 }); // suspension, discarded
     for (let t = 0; t < 2500; t += 50) s = step(s, { dtMs: 50 }); // 20fps
     expect(s.belowThreshold).toBe(true);
+  });
+});
+
+describe("hero/scrubMachine.ts SUPERHOT time flow (Revision 7)", () => {
+  it("flows at full rate while moving vigorously", () => {
+    const s = run(initialScrubState(), 800, { moveAmount: 0.02 });
+    expect(timeFlowScale(s)).toBe(1);
+  });
+
+  it("freezes HARD (exactly 0) shortly after movement stops", () => {
+    let s = run(initialScrubState(), 800, { moveAmount: 0.02 });
+    s = run(s, 1200, {}); // still; energy EMA decays
+    expect(s.mode).toBe("active"); // not yet idle-settling
+    expect(timeFlowScale(s)).toBe(0);
+  });
+
+  it("runs at full time during the settle so the rejoin animates", () => {
+    let s = run(initialScrubState(), 800, { moveAmount: 0.02 });
+    s = run(s, IDLE_THRESHOLD_MS + 200, {});
+    expect(s.mode).toBe("settle");
+    expect(timeFlowScale(s)).toBe(1);
   });
 });

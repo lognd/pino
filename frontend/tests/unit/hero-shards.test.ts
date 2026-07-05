@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
   buildShards,
+  buildPieces,
+  clipPolygonToRect,
+  polygonArea,
   shardTransform,
   shatterAmount,
   VIEW_W,
   VIEW_H,
+  type LetterRect,
   type Shard,
 } from "../../src/hero/shards";
 import { SHOT_MOMENT } from "../../src/hero/timeline";
@@ -132,54 +136,74 @@ describe("hero/shards.ts shardTransform", () => {
   });
 });
 
-// Revision 6: while separated, shards FLOAT -- a slow seeded wander on top of
-// the base displacement, with wall-clock time as an EXPLICIT input so the
-// transform stays pure. These pin the contract: anchored at driftMs 0, zero at
-// progress 0 (reassembly intact), deterministic, bounded, and actually moving.
+// Revision 7: LETTERS ARE OBJECTS. Pieces are crack cells intersected with
+// per-letter glyph rects, so no rendered fragment ever spans two visually
+// disconnected glyphs. These pin the clipper and the piece builder.
 
-describe("hero/shards.ts shardTransform drift (Revision 6 floating)", () => {
-  it("reproduces the un-drifted transform exactly at driftMs = 0", () => {
-    for (const shard of SHARDS) {
-      expect(shardTransform(0.7, shard, 0)).toEqual(shardTransform(0.7, shard));
+describe("hero/shards.ts buildPieces (Revision 7 letters-as-objects)", () => {
+  const RECTS: LetterRect[] = [
+    { x: 115, y: 24, w: 106, h: 176 },
+    { x: 187, y: 24, w: 90, h: 176 },
+    { x: 243, y: 24, w: 89, h: 176 },
+    { x: 325, y: 24, w: 94, h: 176 },
+  ];
+  const PIECES = buildPieces(SHARDS, IMPACT, RECTS);
+
+  it("clips polygons exactly into the rect (Sutherland-Hodgman)", () => {
+    const rect: LetterRect = { x: 100, y: 100, w: 50, h: 50 };
+    const tri = [
+      { x: 90, y: 90 },
+      { x: 200, y: 110 },
+      { x: 110, y: 200 },
+    ];
+    const clipped = clipPolygonToRect(tri, rect);
+    expect(clipped.length).toBeGreaterThanOrEqual(3);
+    for (const p of clipped) {
+      expect(p.x).toBeGreaterThanOrEqual(rect.x - 1e-6);
+      expect(p.x).toBeLessThanOrEqual(rect.x + rect.w + 1e-6);
+      expect(p.y).toBeGreaterThanOrEqual(rect.y - 1e-6);
+      expect(p.y).toBeLessThanOrEqual(rect.y + rect.h + 1e-6);
     }
+    // Disjoint rect -> empty.
+    expect(clipPolygonToRect(tri, { x: 500, y: 500, w: 10, h: 10 })).toEqual([]);
   });
 
-  it("never drifts at progress 0, no matter how much time passes", () => {
-    for (const shard of SHARDS) {
-      const t = shardTransform(0, shard, 123456);
-      expect(t.tx).toBeCloseTo(0, 10);
-      expect(t.ty).toBeCloseTo(0, 10);
-      expect(t.rot).toBeCloseTo(0, 10);
-      expect(t.scale).toBe(1);
-    }
-  });
-
-  it("is deterministic in (progress, shard, driftMs)", () => {
-    for (const shard of SHARDS) {
-      expect(shardTransform(0.8, shard, 3210)).toEqual(shardTransform(0.8, shard, 3210));
-    }
-  });
-
-  it("visibly moves shards over time at full shatter", () => {
-    const moved = SHARDS.some((s) => {
-      const a = shardTransform(1, s, 0);
-      const b = shardTransform(1, s, 2500);
-      return Math.hypot(b.tx - a.tx, b.ty - a.ty) > 1;
-    });
-    expect(moved).toBe(true);
-  });
-
-  it("keeps the float bounded (a wander, not a scatter)", () => {
-    // Peak-to-peak of the anchored sine is 2 * amplitude; amplitude tops out
-    // at DRIFT_TRANSLATE * 1.2 for translation and DRIFT_ROT_DEG for rotation.
-    for (const shard of SHARDS) {
-      for (const t of [500, 2000, 5000, 9000, 14000]) {
-        const base = shardTransform(1, shard, 0);
-        const d = shardTransform(1, shard, t);
-        expect(Math.abs(d.tx - base.tx)).toBeLessThanOrEqual(7 * 1.2 * 2 + 1e-9);
-        expect(Math.abs(d.ty - base.ty)).toBeLessThanOrEqual(7 * 1.2 * 2 + 1e-9);
-        expect(Math.abs(d.rot - base.rot)).toBeLessThanOrEqual(1.8 * 2 + 1e-9);
+  it("every piece stays inside its own letter rect (one letter per object)", () => {
+    expect(PIECES.length).toBeGreaterThan(RECTS.length);
+    for (const piece of PIECES) {
+      const r = RECTS[piece.letterIndex];
+      for (const p of piece.points) {
+        expect(p.x).toBeGreaterThanOrEqual(r.x - 1e-6);
+        expect(p.x).toBeLessThanOrEqual(r.x + r.w + 1e-6);
+        expect(p.y).toBeGreaterThanOrEqual(r.y - 1e-6);
+        expect(p.y).toBeLessThanOrEqual(r.y + r.h + 1e-6);
       }
+    }
+  });
+
+  it("covers every letter with at least one piece", () => {
+    const covered = new Set(PIECES.map((p) => p.letterIndex));
+    for (let i = 0; i < RECTS.length; i++) expect(covered.has(i)).toBe(true);
+  });
+
+  it("gives pieces of the same cell but different letters distinct seeds", () => {
+    const byCellPair = new Map<string, number>();
+    for (const piece of PIECES) {
+      const key = `${piece.seed}`;
+      expect(byCellPair.has(key)).toBe(false);
+      byCellPair.set(key, 1);
+    }
+  });
+
+  it("is deterministic", () => {
+    const again = buildPieces(SHARDS, IMPACT, RECTS);
+    expect(again.length).toBe(PIECES.length);
+    expect(again[5]).toEqual(PIECES[5]);
+  });
+
+  it("drops slivers (no sub-visible fragments)", () => {
+    for (const piece of PIECES) {
+      expect(polygonArea(piece.points)).toBeGreaterThanOrEqual(6 - 1e-9);
     }
   });
 });

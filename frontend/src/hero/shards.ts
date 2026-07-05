@@ -50,15 +50,6 @@ const RAY_COUNT = 8;
 /** Max per-shard translation in SVG user units (viewBox is 640x240).
  * Revision 5: pulled in from 170 -- wide scatter read as confetti. */
 const MAX_TRANSLATE = 110;
-/** Revision 6 drift: max one-sided float amplitude (SVG user units) for a
- * near-impact shard; far slabs float less (heavier). Peak-to-peak excursion
- * is at most 2x this (the sin term spans [-2A, 2A] around its t=0 anchor). */
-const DRIFT_TRANSLATE = 7;
-/** Revision 6 drift: max rotation wobble amplitude, degrees. */
-const DRIFT_ROT_DEG = 1.8;
-/** Revision 6 drift: angular frequency band, rad/ms (periods ~4.5-9s). */
-const DRIFT_W_MIN = 0.0007;
-const DRIFT_W_SPAN = 0.0007;
 /** Max per-shard rotation at full shatter, degrees. Revision 5: 26 -> 9;
  * heavy glass plates barely turn, cartoon shards spin. */
 const MAX_ROTATE_DEG = 9;
@@ -303,31 +294,13 @@ export function buildShards(options: BuildShardsOptions = {}): {
   return { impact, shards };
 }
 
-/** One drift axis: a seeded slow sine anchored to 0 at driftMs = 0 (the
- * `- sin(phase)` term), so t = 0 reproduces the un-drifted transform exactly
- * and the float ramps in without a snap. Pure in (seed, driftMs). */
-function driftWave(seed: number, driftMs: number): number {
-  const w = DRIFT_W_MIN + hash01(seed) * DRIFT_W_SPAN;
-  const phase = hash01(seed + 1) * Math.PI * 2;
-  return Math.sin(w * driftMs + phase) - Math.sin(phase);
-}
-
-/** Pure per-shard transform: same (progress, shard, driftMs) -> same result.
- * shatter is 0 at p = 0 (identity -> pixel-perfect reassembly) and a FULL,
- * HELD 1 at p = 1. Base displacement is along the shard's radial vector from
- * the impact; nearer-impact shards lead and travel farther.
- *
- * Revision 6: while separated, shards FLOAT -- a slow seeded per-shard
- * wander (translation + rotation wobble) on top of the base displacement.
- * `driftMs` is the wall-clock input, made explicit so the function stays
- * pure and deterministic; the drift is scaled by the shatter envelope, so
- * it is zero at p = 0 (reassembly contract intact) and fades out on the
- * settle-home as the lockup drifts back together. */
-export function shardTransform(
-  progress: number,
-  shard: Shard,
-  driftMs = 0,
-): ShardTransform {
+/** Pure per-shard transform: same (progress, shard) -> same result. shatter is
+ * 0 at p = 0 (identity -> pixel-perfect reassembly) and a FULL, HELD 1 at p = 1.
+ * Displacement is along the shard's radial vector from the impact; nearer-impact
+ * shards lead and travel farther. (Revision 7: the float/wander lives in
+ * piecePhysics.ts as an OFFSET on top of this base -- the earlier Revision 6
+ * sine drift is superseded.) */
+export function shardTransform(progress: number, shard: Shard): ShardTransform {
   const amount = shatterAmount(progress);
 
   const exponent = 0.7 + shard.distNorm * 0.8; // 0.7 (near) .. 1.5 (far).
@@ -339,19 +312,132 @@ export function shardTransform(
   const scaleDelta = -0.03 + hash01(shard.seed * 3 + 2) * 0.06; // [-0.03, +0.03]
 
   const mag = MAX_TRANSLATE * reach * staggered;
-  let tx = shard.dirX * mag;
-  let ty = shard.dirY * mag;
-  let rot = spin * MAX_ROTATE_DEG * staggered;
+  const tx = shard.dirX * mag;
+  const ty = shard.dirY * mag;
+  const rot = spin * MAX_ROTATE_DEG * staggered;
   const scale = 1 + scaleDelta * staggered;
   const opacity = 1 - (1 - MIN_OPACITY) * staggered;
 
-  if (driftMs !== 0 && amount > 0) {
-    // Lighter near-impact splinters bob more than heavy periphery slabs.
-    const driftReach = DRIFT_TRANSLATE * (1.2 - shard.distNorm * 0.6) * amount;
-    tx += driftWave(shard.seed * 7 + 3, driftMs) * driftReach;
-    ty += driftWave(shard.seed * 7 + 5, driftMs) * driftReach;
-    rot += driftWave(shard.seed * 7 + 7, driftMs) * DRIFT_ROT_DEG * amount;
+  return { tx, ty, rot, scale, opacity };
+}
+
+// ---------------------------------------------------------------------------
+// Revision 7: LETTERS ARE OBJECTS. A crack cell can span several glyphs, but
+// visually disconnected fragments must never move as one rigid body ("visual
+// disconnect = different object"). Pieces are the intersections of crack
+// cells with per-letter glyph rects: each piece renders exactly one letter's
+// artwork and moves with its own seed/centroid/radial vector.
+// ---------------------------------------------------------------------------
+
+/** Axis-aligned glyph cell of one letter, in viewBox coords. */
+export interface LetterRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** One rendered fragment: a crack cell clipped to a single letter. */
+export interface Piece extends Shard {
+  /** Index into the letter table (which letter's artwork this piece clips). */
+  letterIndex: number;
+}
+
+/** Pieces smaller than this (viewBox units^2) are slivers -- dropped. */
+const MIN_PIECE_AREA = 6;
+
+/** Sutherland-Hodgman clip of a polygon against an axis-aligned rect. Pure;
+ * returns [] when there is no overlap. */
+export function clipPolygonToRect(points: readonly Point[], rect: LetterRect): Point[] {
+  const edges: ((p: Point) => number)[] = [
+    (p) => p.x - rect.x, // inside: right of left edge
+    (p) => rect.x + rect.w - p.x, // left of right edge
+    (p) => p.y - rect.y, // below top edge
+    (p) => rect.y + rect.h - p.y, // above bottom edge
+  ];
+  let poly: Point[] = [...points];
+  for (const inside of edges) {
+    if (poly.length === 0) break;
+    const out: Point[] = [];
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i];
+      const b = poly[(i + 1) % poly.length];
+      const da = inside(a);
+      const db = inside(b);
+      if (da >= 0) out.push(a);
+      if ((da >= 0) !== (db >= 0)) {
+        const t = da / (da - db);
+        out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+      }
+    }
+    poly = out;
+  }
+  return poly;
+}
+
+/** Shoelace polygon area (absolute). Pure. */
+export function polygonArea(points: readonly Point[]): number {
+  let sum = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    sum += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(sum) / 2;
+}
+
+/** Intersect every crack cell with every letter rect -> the piece list the
+ * wordmark renders. Deterministic: seeds derive from (cell seed, letter). */
+export function buildPieces(
+  shards: readonly Shard[],
+  impact: Point,
+  letterRects: readonly LetterRect[],
+): Piece[] {
+  // distNorm scale: farthest field corner from the impact.
+  let maxR = 1e-6;
+  for (const c of [
+    { x: 0, y: 0 },
+    { x: VIEW_W, y: 0 },
+    { x: VIEW_W, y: VIEW_H },
+    { x: 0, y: VIEW_H },
+  ]) {
+    maxR = Math.max(maxR, Math.hypot(c.x - impact.x, c.y - impact.y));
   }
 
-  return { tx, ty, rot, scale, opacity };
+  const pieces: Piece[] = [];
+  for (const shard of shards) {
+    for (let li = 0; li < letterRects.length; li++) {
+      const poly = clipPolygonToRect(shard.points, letterRects[li]);
+      if (poly.length < 3 || polygonArea(poly) < MIN_PIECE_AREA) continue;
+      let cx = 0;
+      let cy = 0;
+      for (const p of poly) {
+        cx += p.x;
+        cy += p.y;
+      }
+      cx /= poly.length;
+      cy /= poly.length;
+      let dx = cx - impact.x;
+      let dy = cy - impact.y;
+      const len = Math.hypot(dx, dy);
+      if (len > 1e-6) {
+        dx /= len;
+        dy /= len;
+      } else {
+        dx = 1;
+        dy = 0;
+      }
+      pieces.push({
+        points: poly,
+        cx,
+        cy,
+        dirX: dx,
+        dirY: dy,
+        distNorm: clamp01(len / maxR),
+        seed: shard.seed * 31 + li * 7 + 3,
+        letterIndex: li,
+      });
+    }
+  }
+  return pieces;
 }

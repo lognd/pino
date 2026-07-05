@@ -9,10 +9,10 @@
 // <Hero/>: the lab reaches inside the progress signal (override it, read fps).
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Wordmark, type WordmarkHandle } from "./Wordmark";
+import { Wordmark, useWordmarkPointer, type WordmarkHandle } from "./Wordmark";
 import { useScrub } from "./useScrub";
 import { useBulletholeClicks } from "./useBulletholeClicks";
-import { DEFAULT_SETTLE_MS } from "./scrubMachine";
+import { DEFAULT_SETTLE_MS, timeFlowScale, type ScrubMachineState } from "./scrubMachine";
 import { DEFAULT_IMPACT_FX, DEFAULT_IMPACT_FY } from "./shards";
 import { SHOT_MOMENT } from "./timeline";
 import type { ScrubSource } from "./timeline";
@@ -58,11 +58,14 @@ export function HeroLab() {
   const [variant, setVariant] = useState<FlashVariant>(DEFAULT_FLASH_VARIANT);
 
   // Revision 5: drawing happens per rAF frame here, not off React state.
-  const onFrame = useCallback((p: number): void => {
+  const onFrame = useCallback((p: number, machine: Readonly<ScrubMachineState>): void => {
     progressRef.current = p;
     sourceRef.current?.render(p);
-    wordmarkHandle.current?.setProgress(p);
+    wordmarkHandle.current?.setProgress(p, timeFlowScale(machine));
   }, []);
+
+  // Cursor-reactive pieces, same wiring as the real Hero.
+  useWordmarkPointer(containerRef, wordmarkHandle);
 
   const scrub = useScrub(containerRef, {
     enabled: !override,

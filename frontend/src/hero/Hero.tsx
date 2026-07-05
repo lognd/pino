@@ -15,7 +15,8 @@
 // lives on the Landing route (App.tsx), not here.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Wordmark, type WordmarkHandle } from "./Wordmark";
+import { Wordmark, useWordmarkPointer, type WordmarkHandle } from "./Wordmark";
+import { timeFlowScale, type ScrubMachineState } from "./scrubMachine";
 import { useScrub } from "./useScrub";
 import { prefersReducedMotion, isTouchDevice } from "./env";
 import type { ScrubSource } from "./timeline";
@@ -56,12 +57,19 @@ export function Hero() {
 
   // Revision 5: all per-frame drawing happens HERE, off the rAF loop --
   // canvas render + imperative wordmark writes. No React state per frame.
-  const onFrame = useCallback((progress: number): void => {
-    progressRef.current = progress;
-    const source = sourceRef.current;
-    if (source && !isQuiescent(source, progress)) source.render(progress);
-    wordmarkHandle.current?.setProgress(progress);
-  }, []);
+  // Revision 7: the machine's SUPERHOT time flow scales the piece physics.
+  const onFrame = useCallback(
+    (progress: number, machine: Readonly<ScrubMachineState>): void => {
+      progressRef.current = progress;
+      const source = sourceRef.current;
+      if (source && !isQuiescent(source, progress)) source.render(progress);
+      wordmarkHandle.current?.setProgress(progress, timeFlowScale(machine));
+    },
+    [],
+  );
+
+  // Cursor-reactive pieces: pointer samples feed the wordmark physics.
+  useWordmarkPointer(containerRef, wordmarkHandle);
 
   // Revision 4: the wordmark element feeds break-on-reach -- the pointer/touch
   // first entering its bounds fires the shot (useScrub raises the hit signal).

@@ -187,6 +187,12 @@ implementing; docs win over guesses.
       per-shard strokes, resize re-init, CSS rest-state ambience.
       Verified: 141 unit + 54 system green; headless fps probe 43.9
       (old) -> 54.8 (new, at the headless vsync ceiling)
+- [x] Hero R7 (2026-07-05, second round): letters-as-objects piece
+      fracture (cell x glyph-rect intersection), baby physics float
+      (instant on separation, spring home, bounded), cursor repulsion,
+      SUPERHOT time flow (hard freeze on stillness; idle 6s -> 4s),
+      poster/init/suspension fallback hardening after the black-hero
+      report. All pure reducers unit-tested (158 unit green)
 - [ ] HUMAN INPUT: pick flash variant in /hero-lab and carousel
       variant in /carousel-lab; confirm hero feel (energy rate, idle
       timer) on a real device

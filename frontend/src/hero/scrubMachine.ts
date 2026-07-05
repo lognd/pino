@@ -49,9 +49,10 @@ export const ADVANCE_RATE_CAP = 0.9;
  * movement (idle-timer keeps running). */
 const MOVE_EPS = 1e-4;
 
-/** No movement for this long -> settle-home. Revision 4: 6s (the old 3s was
- * "a little short"). */
-export const IDLE_THRESHOLD_MS = 6000;
+/** No movement for this long -> settle-home. Revision 7: shortened from 6s
+ * (SUPERHOT model -- the world freezes on stillness, so the wait before the
+ * rejoin reads longer than it is; user asked for a shorter timer). */
+export const IDLE_THRESHOLD_MS = 4000;
 
 /** Default settle-home duration (ms). Doc 08: 4-6s ease-out; 5s is the middle. */
 export const DEFAULT_SETTLE_MS = 5000;
@@ -178,6 +179,25 @@ export function initialScrubState(
     fps: 0,
     belowThreshold: false,
   };
+}
+
+/** SUPERHOT time flow (Revision 7): scene/physics time advances only while
+ * the viewer moves. Smoothed energy at or above this flows time at full
+ * rate; below it, time slows proportionally and freezes at stillness. */
+export const TIME_FULL_ENERGY = 0.5;
+
+/** Below this flow the world SNAPS to fully frozen: the energy EMA only
+ * asymptotes toward 0, and a lingering 0.1% flow reads as a slow leak
+ * instead of the SUPERHOT hard freeze. */
+const TIME_FLOW_FLOOR = 0.02;
+
+/** Time-flow scale in [0,1] for the current machine state: energy-driven in
+ * active mode ("time moves when you move"), and pinned to 1 during the
+ * settle/break/touch ramps so the rejoin and the shot always animate. */
+export function timeFlowScale(state: ScrubMachineState): number {
+  if (state.mode !== "active") return 1;
+  const flow = clamp01(state.energy / TIME_FULL_ENERGY);
+  return flow < TIME_FLOW_FLOOR ? 0 : flow;
 }
 
 /** Begin easing home. Revision 4: home is ALWAYS 0 -- the lockup reassembles on

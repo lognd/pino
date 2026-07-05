@@ -18,7 +18,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Wordmark, useWordmarkPointer, type WordmarkHandle } from "./Wordmark";
 import { timeFlowScale, type ScrubMachineState } from "./scrubMachine";
 import { useScrub } from "./useScrub";
-import { prefersReducedMotion, isTouchDevice } from "./env";
+import { prefersReducedMotion, isTouchDevice, isNarrowViewport } from "./env";
 import type { ScrubSource } from "./timeline";
 import { createHeroSource, resolveHeroSourceKind } from "./sources/select";
 import { logDebug, logWarn } from "../lib/logging";
@@ -51,6 +51,7 @@ export function Hero() {
   const [posterBroken, setPosterBroken] = useState(false);
   const [reduced] = useState<boolean>(prefersReducedMotion);
   const [touch] = useState<boolean>(isTouchDevice);
+  const [stacked] = useState<boolean>(isNarrowViewport);
 
   // Frame-accurate progress of the latest draw (for post-resize repaints).
   const progressRef = useRef(0);
@@ -202,10 +203,12 @@ export function Hero() {
   return (
     <div
       ref={containerRef}
-      // max-h caps the 8/3 box on short/ultrawide viewports so the hero
-      // never swallows the whole first screen; the ResizeObserver re-sizes
-      // the canvas backing store to whatever box results.
-      className="relative aspect-[8/3] max-h-[85svh] w-full overflow-hidden bg-mp-black-true"
+      // max-h caps the box on short/ultrawide viewports so the hero never
+      // swallows the whole first screen; the ResizeObserver re-sizes the
+      // canvas backing store to whatever box results. Taller aspect below
+      // sm: the stacked two-row "MEL / PINO" mobile wordmark (Wordmark.tsx's
+      // `stacked` prop) needs vertical room the wide 8/3 box doesn't give it.
+      className="relative aspect-[3/4] max-h-[85svh] w-full overflow-hidden bg-mp-black-true sm:aspect-[8/3]"
       aria-hidden="true"
     >
       {/* Poster: the backdrop that paints first and the reduced-motion /
@@ -241,8 +244,8 @@ export function Hero() {
           imperatively once live -- the hero stays branded even if the
           poster asset never arrives. */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div ref={wordmarkRef} className="w-3/4 max-w-3xl">
-          <Wordmark ref={wordmarkHandle} className="w-full" />
+        <div ref={wordmarkRef} className={stacked ? "w-1/2 max-w-xs" : "w-3/4 max-w-3xl"}>
+          <Wordmark ref={wordmarkHandle} stacked={stacked} className="w-full" />
         </div>
       </div>
     </div>

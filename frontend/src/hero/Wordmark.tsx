@@ -69,25 +69,59 @@ const RIM_MAX = 0.55;
 const LETTER_RECT_MARGIN = 4;
 
 /** Per-letter layout, measured once in the real webfont (see module note).
- * textX is the pre-skew <text> x; rect is the post-skew glyph cell. */
-const LETTERS: { char: string; textX: number; fill: string; rect: LetterRect }[] = [
-  { char: "M", textX: 150, fill: RED, rect: { x: 119, y: 28, w: 98.6, h: 168 } },
-  { char: "E", textX: 222, fill: RED, rect: { x: 191, y: 28, w: 82.6, h: 168 } },
-  { char: "L", textX: 278, fill: RED, rect: { x: 247, y: 28, w: 81.6, h: 168 } },
-  { char: "P", textX: 360, fill: WHITE, rect: { x: 329, y: 28, w: 86.6, h: 168 } },
-  { char: "I", textX: 420, fill: WHITE, rect: { x: 389, y: 28, w: 54.6, h: 168 } },
-  { char: "N", textX: 448, fill: WHITE, rect: { x: 417, y: 28, w: 93.6, h: 168 } },
-  { char: "O", textX: 515, fill: WHITE, rect: { x: 484, y: 28, w: 87.6, h: 168 } },
+ * textX is the pre-skew <text> x; textY its baseline; rect is the post-skew
+ * glyph cell. */
+interface LetterEntry {
+  char: string;
+  textX: number;
+  textY: number;
+  fill: string;
+  rect: LetterRect;
+}
+
+const LETTERS: LetterEntry[] = [
+  { char: "M", textX: 150, textY: 168, fill: RED, rect: { x: 119, y: 28, w: 98.6, h: 168 } },
+  { char: "E", textX: 222, textY: 168, fill: RED, rect: { x: 191, y: 28, w: 82.6, h: 168 } },
+  { char: "L", textX: 278, textY: 168, fill: RED, rect: { x: 247, y: 28, w: 81.6, h: 168 } },
+  { char: "P", textX: 360, textY: 168, fill: WHITE, rect: { x: 329, y: 28, w: 86.6, h: 168 } },
+  { char: "I", textX: 420, textY: 168, fill: WHITE, rect: { x: 389, y: 28, w: 54.6, h: 168 } },
+  { char: "N", textX: 448, textY: 168, fill: WHITE, rect: { x: 417, y: 28, w: 93.6, h: 168 } },
+  { char: "O", textX: 515, textY: 168, fill: WHITE, rect: { x: 484, y: 28, w: 87.6, h: 168 } },
 ];
 
+/** Stacked two-row "MEL / PINO" layout for mobile (see docs/design/08's
+ * mobile addendum) -- same glyph cells (M/E/L/P/I/N/O share the horizontal
+ * table's rect.w/h, since it's the same font at the same size), just
+ * re-centered per row and stacked vertically with a row gap. The constant
+ * +31 x-offset between rect.x and textX is the skewX(-9) pre-shift, true
+ * for every letter in the horizontal table -- kept identical here. */
+const STACKED_ROW_GAP = 24;
+const STACKED_FIELD_W = 320;
+function stackedRow(letters: LetterEntry[], rowTop: number, textY: number): LetterEntry[] {
+  const left = letters[0].rect.x;
+  const right = letters[letters.length - 1].rect.x + letters[letters.length - 1].rect.w;
+  const rowWidth = right - left;
+  const margin = (STACKED_FIELD_W - rowWidth) / 2;
+  return letters.map((l) => {
+    const x = margin + (l.rect.x - left);
+    return { ...l, textY, rect: { ...l.rect, x, y: rowTop }, textX: x + (l.textX - l.rect.x) };
+  });
+}
+const STACKED_LETTERS: LetterEntry[] = [
+  ...stackedRow(LETTERS.slice(0, 3), 28, 168), // MEL
+  ...stackedRow(LETTERS.slice(3, 7), 28 + 168 + STACKED_ROW_GAP, 168 + 168 + STACKED_ROW_GAP), // PINO
+];
+export const STACKED_VIEW_W = STACKED_FIELD_W;
+export const STACKED_VIEW_H = 28 + 168 + STACKED_ROW_GAP + 168 + 28;
+
 /** One letter's glyph, in the shared condensed-italic lean. */
-function letterGlyph(index: number, fillOverride?: string) {
-  const l = LETTERS[index];
+function letterGlyph(letters: LetterEntry[], index: number, fillOverride?: string) {
+  const l = letters[index];
   return (
     <g transform="skewX(-9)">
       <text
         x={l.textX}
-        y="168"
+        y={l.textY}
         fontFamily="'Barlow Condensed', sans-serif"
         fontWeight={800}
         fontStyle="italic"
@@ -140,25 +174,33 @@ export interface WordmarkProps {
   impactFx?: number;
   /** Impact y as a fraction of the field height (tunable in /hero-lab). */
   impactFy?: number;
+  /** Stacked two-row "MEL / PINO" layout for narrow (mobile) viewports --
+   * same fracture machinery, a taller/narrower field and re-centered
+   * letter cells. The header/nav lockup (StaticWordmark) never stacks. */
+  stacked?: boolean;
   className?: string;
 }
 
 /** The fracturing MEL PINO lockup. */
 export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordmark(
-  { progress = 0, impactFx = DEFAULT_IMPACT_FX, impactFy = DEFAULT_IMPACT_FY, className },
+  { progress = 0, impactFx = DEFAULT_IMPACT_FX, impactFy = DEFAULT_IMPACT_FY, stacked = false, className },
   ref,
 ) {
-  // Fracture geometry, rebuilt only when the impact point changes.
+  const letters = stacked ? STACKED_LETTERS : LETTERS;
+  const viewW = stacked ? STACKED_VIEW_W : VIEW_W;
+  const viewH = stacked ? STACKED_VIEW_H : VIEW_H;
+
+  // Fracture geometry, rebuilt only when the impact point or layout changes.
   const { pieces } = useMemo(() => {
-    const built = buildShards({ impactFx, impactFy });
-    const rects = LETTERS.map((l) => ({
+    const built = buildShards({ impactFx, impactFy, viewW, viewH });
+    const rects = letters.map((l) => ({
       x: l.rect.x - LETTER_RECT_MARGIN,
       y: l.rect.y - LETTER_RECT_MARGIN,
       w: l.rect.w + LETTER_RECT_MARGIN * 2,
       h: l.rect.h + LETTER_RECT_MARGIN * 2,
     }));
-    return { pieces: buildPieces(built.shards, built.impact, rects) };
-  }, [impactFx, impactFy]);
+    return { pieces: buildPieces(built.shards, built.impact, rects, viewW, viewH) };
+  }, [impactFx, impactFy, letters, viewW, viewH]);
   // Clip polygons are geometry, not animation: compute once per fracture.
   const clipPoints = useMemo(
     () => pieces.map((p) => bleedPolygon(p.points, BLEED)),
@@ -231,6 +273,8 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
           shatter: 0,
           pointerX: null,
           pointerY: null,
+          viewW,
+          viewH,
         });
         return;
       }
@@ -250,6 +294,8 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
         shatter,
         pointerX: pointer.current?.x ?? null,
         pointerY: pointer.current?.y ?? null,
+        viewW,
+        viewH,
       });
       const sim = physics.current;
       for (let i = 0; i < pieces.length; i++) {
@@ -269,7 +315,7 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
         node.setAttribute("opacity", t.opacity.toFixed(4));
       }
     },
-    [pieces],
+    [pieces, viewW, viewH],
   );
 
   const setPointer = useCallback((clientX: number | null, clientY = 0): void => {
@@ -284,10 +330,10 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
       return;
     }
     pointer.current = {
-      x: ((clientX - rect.left) / rect.width) * VIEW_W,
-      y: ((clientY - rect.top) / rect.height) * VIEW_H,
+      x: ((clientX - rect.left) / rect.width) * viewW,
+      y: ((clientY - rect.top) / rect.height) * viewH,
     };
-  }, []);
+  }, [viewW, viewH]);
 
   useImperativeHandle(ref, () => ({ setProgress: apply, setPointer }), [apply, setPointer]);
 
@@ -307,7 +353,7 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
   return (
     <svg
       ref={svgRef}
-      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+      viewBox={`0 0 ${viewW} ${viewH}`}
       className={className}
       role="presentation"
       aria-hidden="true"
@@ -319,9 +365,9 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
     >
       <defs>
         {/* Each letter's artwork exists once; pieces <use> only their own. */}
-        {LETTERS.map((_, i) => (
+        {letters.map((_, i) => (
           <g id={`mp-letter-${i}`} key={i}>
-            {letterGlyph(i)}
+            {letterGlyph(letters, i)}
           </g>
         ))}
         {/* Origin-side rim light: white -> transparent, left to right. */}
@@ -331,7 +377,7 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
           <stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
         </linearGradient>
         <mask id="mp-rim-mask">
-          <rect x="0" y="0" width={VIEW_W} height={VIEW_H} fill="url(#mp-rim-grad)" />
+          <rect x="0" y="0" width={viewW} height={viewH} fill="url(#mp-rim-grad)" />
         </mask>
         {piecesMounted &&
           pieces.map((_, i) => (
@@ -343,7 +389,7 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
 
       {/* At rest: ONE clean, unsplit lockup -- no clips, no seams. */}
       <g ref={staticRef} style={{ display: initialShatter > 0 ? "none" : undefined }}>
-        {LETTERS.map((_, i) => (
+        {letters.map((_, i) => (
           <use key={i} href={`#mp-letter-${i}`} />
         ))}
       </g>
@@ -367,8 +413,8 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
 
       {/* Flash-beat rim light raking in from the off-frame origin (left). */}
       <g ref={rimRef} opacity="0" mask="url(#mp-rim-mask)">
-        {LETTERS.map((_, i) => (
-          <g key={i}>{letterGlyph(i, "#FFFFFF")}</g>
+        {letters.map((_, i) => (
+          <g key={i}>{letterGlyph(letters, i, "#FFFFFF")}</g>
         ))}
       </g>
     </svg>
@@ -392,7 +438,7 @@ export function StaticWordmark({ className }: { className?: string }) {
       focusable="false"
     >
       {LETTERS.map((_, i) => (
-        <g key={i}>{letterGlyph(i)}</g>
+        <g key={i}>{letterGlyph(LETTERS, i)}</g>
       ))}
     </svg>
   );

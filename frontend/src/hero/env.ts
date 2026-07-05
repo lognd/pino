@@ -21,3 +21,16 @@ export function isTouchDevice(): boolean {
     window.matchMedia("(hover: none)").matches
   );
 }
+
+/** True below Tailwind's `sm` breakpoint (640px) -- drives the stacked
+ * two-row "MEL / PINO" wordmark layout on mobile (docs/design/08's mobile
+ * addendum). SSR-safe. Read once at mount like reduced/touch above; a
+ * viewport that crosses this boundary without a reload (rare) just keeps
+ * whichever layout it started with. */
+export function isNarrowViewport(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(max-width: 639px)").matches
+  );
+}

@@ -101,6 +101,11 @@ export interface PiecePhysicsInput {
   /** Pointer in viewBox coords, or null when it is not over the hero. */
   pointerX: number | null;
   pointerY: number | null;
+  /** Field bounds the soft border repels pieces back into -- defaults to
+   * VIEW_W/VIEW_H (the horizontal lockup); the mobile stacked two-row
+   * lockup passes its own (taller, narrower) field. */
+  viewW?: number;
+  viewH?: number;
 }
 
 /** Fresh all-zero physics state for `count` pieces. */
@@ -151,6 +156,8 @@ export function stepPiecePhysics(
   const { ox, oy, vx, vy, prevGate } = state;
   const px = input.pointerX;
   const py = input.pointerY;
+  const viewW = input.viewW ?? VIEW_W;
+  const viewH = input.viewH ?? VIEW_H;
 
   // Homing envelope: rises only while shatter is falling (reassembling),
   // smoothed so direction flicker from jittery input cannot pump it.
@@ -207,9 +214,9 @@ export function stepPiecePhysics(
     // Border: linear-in-penetration inward push; velocities untouched, so
     // deflected pieces carry their momentum along the wall and spread.
     if (posX < BORDER_MARGIN) ax += BORDER_K * (BORDER_MARGIN - posX);
-    else if (posX > VIEW_W - BORDER_MARGIN) ax -= BORDER_K * (posX - (VIEW_W - BORDER_MARGIN));
+    else if (posX > viewW - BORDER_MARGIN) ax -= BORDER_K * (posX - (viewW - BORDER_MARGIN));
     if (posY < BORDER_MARGIN) ay += BORDER_K * (BORDER_MARGIN - posY);
-    else if (posY > VIEW_H - BORDER_MARGIN) ay -= BORDER_K * (posY - (VIEW_H - BORDER_MARGIN));
+    else if (posY > viewH - BORDER_MARGIN) ay -= BORDER_K * (posY - (viewH - BORDER_MARGIN));
 
     // Semi-implicit Euler + hard bounds (roam room grows with shatter).
     const roam = MAX_OFFSET * clamp01(input.shatter / ROAM_FULL_SHATTER);

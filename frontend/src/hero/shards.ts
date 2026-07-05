@@ -89,6 +89,12 @@ export interface ShardTransform {
 export interface BuildShardsOptions {
   impactFx?: number;
   impactFy?: number;
+  /** Field width/height in viewBox units -- defaults to VIEW_W/VIEW_H (the
+   * horizontal lockup). The mobile stacked two-row lockup passes its own
+   * (taller, narrower) field so the fracture actually fits its letters
+   * instead of tiling the wrong-shaped box. */
+  viewW?: number;
+  viewH?: number;
 }
 
 function smoothstep(t: number): number {
@@ -106,18 +112,25 @@ export function shatterAmount(progress: number): number {
 
 /** First positive intersection of the ray from (ox,oy) in unit direction
  * (dx,dy) with the [0,W]x[0,H] rect boundary. */
-function rayToBoundary(ox: number, oy: number, dx: number, dy: number): Point {
+function rayToBoundary(
+  ox: number,
+  oy: number,
+  dx: number,
+  dy: number,
+  w: number,
+  h: number,
+): Point {
   let best = Infinity;
   const consider = (t: number): void => {
     if (t > 1e-6 && t < best) best = t;
   };
   if (Math.abs(dx) > 1e-9) {
     consider((0 - ox) / dx);
-    consider((VIEW_W - ox) / dx);
+    consider((w - ox) / dx);
   }
   if (Math.abs(dy) > 1e-9) {
     consider((0 - oy) / dy);
-    consider((VIEW_H - oy) / dy);
+    consider((h - oy) / dy);
   }
   if (!isFinite(best)) best = 0;
   return { x: ox + dx * best, y: oy + dy * best };
@@ -166,8 +179,10 @@ function buildPrimary(
   angle: number,
   gap: number,
   seed: number,
+  w: number,
+  h: number,
 ): Primary {
-  const boundary = rayToBoundary(ix, iy, Math.cos(angle), Math.sin(angle));
+  const boundary = rayToBoundary(ix, iy, Math.cos(angle), Math.sin(angle), w, h);
   const R = Math.hypot(boundary.x - ix, boundary.y - iy);
   // 2..5 interior kinks -> 3..6 segments.
   const kinks = 2 + Math.floor(hash01(seed * 7 + 1) * 4);
@@ -199,8 +214,10 @@ export function buildShards(options: BuildShardsOptions = {}): {
   impact: Point;
   shards: Shard[];
 } {
-  const ix = clamp01(options.impactFx ?? DEFAULT_IMPACT_FX) * VIEW_W;
-  const iy = clamp01(options.impactFy ?? DEFAULT_IMPACT_FY) * VIEW_H;
+  const w = options.viewW ?? VIEW_W;
+  const h = options.viewH ?? VIEW_H;
+  const ix = clamp01(options.impactFx ?? DEFAULT_IMPACT_FX) * w;
+  const iy = clamp01(options.impactFy ?? DEFAULT_IMPACT_FY) * h;
   const impact: Point = { x: ix, y: iy };
 
   // Angles: jittered base rays + one ray straight at each corner (so no sector
@@ -212,9 +229,9 @@ export function buildShards(options: BuildShardsOptions = {}): {
   }
   const corners: Point[] = [
     { x: 0, y: 0 },
-    { x: VIEW_W, y: 0 },
-    { x: VIEW_W, y: VIEW_H },
-    { x: 0, y: VIEW_H },
+    { x: w, y: 0 },
+    { x: w, y: h },
+    { x: 0, y: h },
   ];
   for (const c of corners) rawAngles.push(Math.atan2(c.y - iy, c.x - ix));
   const angles = rawAngles
@@ -227,7 +244,7 @@ export function buildShards(options: BuildShardsOptions = {}): {
     const prev = angles[(k - 1 + n) % n];
     const nextA = angles[(k + 1) % n];
     const gap = Math.min(circularGap(angles[k], prev), circularGap(angles[k], nextA));
-    primaries.push(buildPrimary(ix, iy, angles[k], gap, k + 1));
+    primaries.push(buildPrimary(ix, iy, angles[k], gap, k + 1, w, h));
   }
 
   const maxR = Math.max(...primaries.map((p) => p.R), 1e-6);
@@ -394,14 +411,16 @@ export function buildPieces(
   shards: readonly Shard[],
   impact: Point,
   letterRects: readonly LetterRect[],
+  viewW: number = VIEW_W,
+  viewH: number = VIEW_H,
 ): Piece[] {
   // distNorm scale: farthest field corner from the impact.
   let maxR = 1e-6;
   for (const c of [
     { x: 0, y: 0 },
-    { x: VIEW_W, y: 0 },
-    { x: VIEW_W, y: VIEW_H },
-    { x: 0, y: VIEW_H },
+    { x: viewW, y: 0 },
+    { x: viewW, y: viewH },
+    { x: 0, y: viewH },
   ]) {
     maxR = Math.max(maxR, Math.hypot(c.x - impact.x, c.y - impact.y));
   }

@@ -10,6 +10,8 @@
 // src/api/invoices.ts and src/api/bookings.ts -- so a handler graduating
 // to a real endpoint changes nothing about the shape.
 
+import { businessLegalName, businessShortName } from "../lib/brand";
+
 // Mirrors the `courses` table (docs/design/03-database.md).
 export interface MockCourse {
   id: string;
@@ -367,8 +369,10 @@ export const invoices: MockInvoice[] = [
 ];
 
 export const settings: MockSettings = {
-  business_legal_name: "Mel Pino, LLC",
-  business_short_name: "Mel Pino",
+  // Interpolated from lib/brand.ts -- doc 00's business-identity rule
+  // applies to mock data too (the Settings screen displays these).
+  business_legal_name: businessLegalName,
+  business_short_name: businessShortName,
   default_class_capacity: 12,
   email_reminders_enabled: true,
   sms_reminders_enabled: false,

@@ -78,18 +78,29 @@ jobs:
             exit 1
           fi
       - name: no hardcoded business name outside sanctioned files
-        # Sanctioned: backend config (business_legal_name/business_short_name
-        # live in AppConfig, not hardcoded), frontend/src/lib/brand.ts, all
-        # of docs/, and the wordmark asset itself (see
-        # docs/design/00-overview.md's "Business identity" section).
+        # Sanctioned homes (audited 2026-07-04; keep in sync with
+        # docs/design/00-overview.md's "Business identity" section):
+        # the two config homes (AppConfig defaults, brand.ts), env-example
+        # files documenting those defaults, project prose (docs/, README,
+        # TODO), the wordmark asset, static build-time text that cannot
+        # import brand.ts (index.html fallbacks, llms.txt -- both
+        # SAMPLE-marked), system-test literals (Playwright specs run in
+        # node and cannot import brand.ts, which reads import.meta.env),
+        # and this workflow itself (the pattern string below).
         run: |
-          if git grep -Il "Mel Pino" -- . \
-              ':!docs/**' \
-              ':!frontend/src/lib/brand.ts' \
-              ':!*.svg' \
-              | grep -q .; then
+          exclusions=(
+            ':!docs/**' ':!README.md' ':!TODO.md'
+            ':!frontend/src/lib/brand.ts'
+            ':!backend/src/melpino_backend/app/config.py'
+            ':!backend/.env.example' ':!frontend/env.example'
+            ':!*.svg'
+            ':!frontend/index.html' ':!frontend/public/llms.txt'
+            ':!frontend/tests/system/**'
+            ':!.github/workflows/ci.yml'
+          )
+          if git grep -Il "Mel Pino" -- . "${exclusions[@]}" | grep -q .; then
             echo "hardcoded business name found outside sanctioned files:"
-            git grep -Il "Mel Pino" -- . ':!docs/**' ':!frontend/src/lib/brand.ts' ':!*.svg'
+            git grep -Il "Mel Pino" -- . "${exclusions[@]}"
             exit 1
           fi
       - name: no hardcoded real domain outside Caddyfile

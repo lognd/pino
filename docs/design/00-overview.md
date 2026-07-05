@@ -90,11 +90,18 @@ else:
    defaults) -- used in titles, headers, legal-page text interpolation.
 
 Every other file interpolates from one of those two sources. Grepping
-the repo for a hardcoded "Mel Pino" outside those two files (plus this
-docs/ directory and the wordmark SVG asset) must return nothing --
-[12-testing-strategy.md](12-testing-strategy.md) makes this an actual
-CI check. The wordmark logo asset is the one sanctioned exception
-(replacing the brand means replacing the asset).
+the repo for a hardcoded "Mel Pino" outside the sanctioned homes must
+return nothing -- [12-testing-strategy.md](12-testing-strategy.md)
+makes this an actual CI check. Sanctioned homes (audited; the CI
+policy job's exclusion list mirrors this exactly): the two config
+homes above, the env-example files documenting their defaults,
+project prose (docs/, README.md, TODO.md), the wordmark SVG asset,
+static build-time text that cannot import brand.ts
+(frontend/index.html fallbacks and public/llms.txt, both
+SAMPLE-marked -- update them when the brand changes), Playwright
+system-test literals (node context, cannot import brand.ts), and the
+CI policy job itself. Changing the brand = change the two config
+homes + regenerate/re-edit the static sanctioned files.
 
 Domain is undecided (root README open question) -- Caddyfile and
 configs use a `SITE_DOMAIN` placeholder until it lands.

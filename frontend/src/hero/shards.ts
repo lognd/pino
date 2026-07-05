@@ -4,7 +4,7 @@
 //
 // SHATTER ENVELOPE (Revision 3 -- supersedes Revision 2's tent rule; binding
 // user feedback: "keep the shatter effect when the cursor is all the way to
-// the right; on inaction, the Mel Pino should come back together"):
+// the right; on inaction, the [wordmark] should come back together"):
 //
 //     shatter(p) = 0                                          for p <= SHOT_MOMENT
 //                = smoothstep((p - SHOT_MOMENT)/(1 - SHOT))   rising to 1 at p = 1

@@ -270,6 +270,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/invoices/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Stats
+         * @description Aggregate invoice/payment/refund stats for the admin dashboard --
+         *     thin wrapper over domain/invoices/stats.py. Declared BEFORE the
+         *     /{invoice_id} routes so FastAPI never tries to parse "stats" as an
+         *     invoice id.
+         */
+        get: operations["get_stats_api_admin_invoices_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/invoices": {
         parameters: {
             query?: never;
@@ -279,15 +302,15 @@ export interface paths {
         };
         /**
          * List Invoices
-         * @description Admin invoice listing.
+         * @description Admin invoice listing (most recent first).
          */
         get: operations["list_invoices_api_admin_invoices_get"];
         put?: never;
         /**
-         * Create Invoice
-         * @description Admin creates a new invoice.
+         * Create Invoice Endpoint
+         * @description Admin creates a new draft invoice.
          */
-        post: operations["create_invoice_api_admin_invoices_post"];
+        post: operations["create_invoice_endpoint_api_admin_invoices_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -305,7 +328,12 @@ export interface paths {
         put?: never;
         /**
          * Send Invoice
-         * @description Admin sends (or re-sends) the invoice email.
+         * @description Admin sends (or re-sends) the invoice email -- flips draft ->
+         *     sent (idempotent for an already-sent invoice) and emails the
+         *     pay-by-link URL. The link is the invoice's one stable derived token
+         *     (see derive_pay_token / pay_link_for_invoice), so a re-send carries
+         *     the SAME URL as the original -- nothing is invalidated by
+         *     re-sending.
          */
         post: operations["send_invoice_api_admin_invoices__invoice_id__send_post"];
         delete?: never;
@@ -324,10 +352,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Record Manual Payment
+         * Record Manual Payment Endpoint
          * @description Admin records a Zelle/cash/card-reader-outside-the-system payment.
          */
-        post: operations["record_manual_payment_api_admin_invoices__invoice_id__manual_payment_post"];
+        post: operations["record_manual_payment_endpoint_api_admin_invoices__invoice_id__manual_payment_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -344,17 +372,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Refund Payment
+         * Refund Payment Endpoint
          * @description Admin-only (not staff -- see docs/design/02's authorization model).
          */
-        post: operations["refund_payment_api_admin_invoices__invoice_id__refund_post"];
+        post: operations["refund_payment_endpoint_api_admin_invoices__invoice_id__refund_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/admin/invoices/admin/sessions/{class_session_id}/invoice-unpaid": {
+    "/api/admin/sessions/{class_session_id}/invoice-unpaid": {
         parameters: {
             query?: never;
             header?: never;
@@ -365,17 +393,18 @@ export interface paths {
         put?: never;
         /**
          * Invoice Unpaid For Session
-         * @description "Invoice everyone still unpaid for Saturday's class" -- see
-         *     docs/design/05-payments-and-invoicing.md.
+         * @description "Invoice everyone still unpaid for Saturday's class" -- creates one
+         *     invoice per confirmed booking on the session that has no invoice_id
+         *     yet, skipping already-invoiced bookings.
          */
-        post: operations["invoice_unpaid_for_session_api_admin_invoices_admin_sessions__class_session_id__invoice_unpaid_post"];
+        post: operations["invoice_unpaid_for_session_api_admin_sessions__class_session_id__invoice_unpaid_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/invoices/pay/{pay_token}": {
+    "/api/pay/{token}": {
         parameters: {
             query?: never;
             header?: never;
@@ -383,10 +412,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Invoice By Pay Token
-         * @description Pay page data: amount due + configured payment methods.
+         * Get Invoice Status
+         * @description GET /api/pay/{token} -- pay page data: amount due + configured
+         *     payment methods. Token invalid -> 404 (never confirms existence).
          */
-        get: operations["get_invoice_by_pay_token_api_invoices_pay__pay_token__get"];
+        get: operations["get_invoice_status_api_pay__token__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -395,7 +425,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/invoices/pay/{pay_token}/stripe-intent": {
+    "/api/pay/{token}/payment-methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Payment Methods
+         * @description POST /api/pay/{token}/payment-methods -- availability check scoped
+         *     to a real invoice token (still 404s an invalid token, unlike the
+         *     unauthenticated GET /api/config, which is deliberately fine to leak
+         *     global availability but not per-invoice existence).
+         */
+        post: operations["check_payment_methods_api_pay__token__payment_methods_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pay/{token}/stripe-intent": {
         parameters: {
             query?: never;
             header?: never;
@@ -406,16 +459,26 @@ export interface paths {
         put?: never;
         /**
          * Create Stripe Intent
-         * @description Creates a Stripe PaymentIntent for this invoice's remaining balance.
+         * @description Creates a Stripe PaymentIntent for this invoice's remaining
+         *     balance. The webhook (api/webhooks.py), not this endpoint, is what
+         *     records the Payment row and settles the invoice -- this only ever
+         *     hands back a client_secret for the frontend to confirm against.
+         *
+         *     Row-locked + idempotent-reuse (CRIB: logand.app's pay_invoice): the
+         *     lock serializes concurrent requests against the SAME invoice, and a
+         *     still-live existing intent is reused rather than re-created -- Stripe
+         *     would happily create as many PaymentIntents as asked, and a guest
+         *     confirming two of them (double-clicked pay button, two open tabs)
+         *     would really be charged twice for one invoice.
          */
-        post: operations["create_stripe_intent_api_invoices_pay__pay_token__stripe_intent_post"];
+        post: operations["create_stripe_intent_api_pay__token__stripe_intent_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/invoices/pay/{pay_token}/paypal-order": {
+    "/api/pay/{token}/paypal-order": {
         parameters: {
             query?: never;
             header?: never;
@@ -425,17 +488,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create Paypal Order
+         * Create Paypal Order Endpoint
          * @description Creates a PayPal order for this invoice's remaining balance.
          */
-        post: operations["create_paypal_order_api_invoices_pay__pay_token__paypal_order_post"];
+        post: operations["create_paypal_order_endpoint_api_pay__token__paypal_order_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/invoices/pay/{pay_token}/paypal-order/{order_id}/capture": {
+    "/api/pay/{token}/paypal-order/{order_id}/capture": {
         parameters: {
             query?: never;
             header?: never;
@@ -445,30 +508,14 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Capture Paypal Order
-         * @description Captures an approved PayPal order.
+         * Capture Paypal Order Endpoint
+         * @description Captures an approved PayPal order and records the resulting
+         *     Payment -- rejects a capture whose reference_id doesn't match THIS
+         *     invoice (see paypal.PayPalCapture's own doc comment: never trust the
+         *     client-supplied order_id belongs to the invoice URL it was posted
+         *     to).
          */
-        post: operations["capture_paypal_order_api_invoices_pay__pay_token__paypal_order__order_id__capture_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/invoices/pay/payment-methods": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Payment Methods
-         * @description Which of stripe/paypal/zelle are currently configured.
-         */
-        get: operations["get_payment_methods_api_invoices_pay_payment_methods_get"];
-        put?: never;
-        post?: never;
+        post: operations["capture_paypal_order_endpoint_api_pay__token__paypal_order__order_id__capture_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -487,7 +534,10 @@ export interface paths {
         /**
          * Stripe Webhook
          * @description Verifies the Stripe signature, then handles payment_intent.succeeded/
-         *     charge.refund.updated/charge.dispute.* idempotently.
+         *     .payment_failed idempotently. NOTE: no session/CSRF auth here by
+         *     design -- Stripe signature verification IS the auth for this route
+         *     (see app/app.py's CSRF-exempt prefix list); do not add require_admin
+         *     or csrf checks.
          */
         post: operations["stripe_webhook_api_webhooks_stripe_post"];
         delete?: never;
@@ -715,10 +765,10 @@ export interface paths {
         get: operations["list_waivers_api_admin_waivers_students__student_id__get"];
         put?: never;
         /**
-         * Upload Waiver
+         * Upload Waiver Endpoint
          * @description Admin uploads a waiver scan for a student -- allowlisted content types only.
          */
-        post: operations["upload_waiver_api_admin_waivers_students__student_id__post"];
+        post: operations["upload_waiver_endpoint_api_admin_waivers_students__student_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -766,8 +816,8 @@ export interface components {
              */
             accepted: boolean;
         };
-        /** Body_upload_waiver_api_admin_waivers_students__student_id__post */
-        Body_upload_waiver_api_admin_waivers_students__student_id__post: {
+        /** Body_upload_waiver_endpoint_api_admin_waivers_students__student_id__post */
+        Body_upload_waiver_endpoint_api_admin_waivers_students__student_id__post: {
             /** File */
             file: string;
         };
@@ -871,6 +921,35 @@ export interface components {
             db: string;
         };
         /**
+         * InvoiceCreateRequest
+         * @description Admin's new-invoice form.
+         */
+        InvoiceCreateRequest: {
+            /** Student Id */
+            student_id: string;
+            /** Line Items */
+            line_items: components["schemas"]["LineItemRequest"][];
+            /** Memo */
+            memo?: string | null;
+        };
+        /**
+         * LineItemRequest
+         * @description One line item on a create-invoice request.
+         */
+        LineItemRequest: {
+            /** Description */
+            description: string;
+            /**
+             * Quantity
+             * @default 1
+             */
+            quantity: number | string;
+            /** Unit Price */
+            unit_price: number | string;
+            /** Unit */
+            unit?: string | null;
+        };
+        /**
          * LoginRequest
          * @description Admin login form fields.
          */
@@ -879,6 +958,21 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /**
+         * ManualPaymentRequest
+         * @description Admin's manual-payment form.
+         */
+        ManualPaymentRequest: {
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "paypal" | "zelle" | "in_person" | "other";
+            /** Amount */
+            amount: number | string;
+            /** Note */
+            note?: string | null;
         };
         /**
          * MeResponse
@@ -915,6 +1009,21 @@ export interface components {
             /** Business Short Name */
             business_short_name: string;
             payment_methods: components["schemas"]["PaymentMethods"];
+        };
+        /**
+         * RefundRequest
+         * @description Admin's refund form -- client_request_id is REQUIRED (see
+         *     domain/invoices/refunds.py's own doc comment on why).
+         */
+        RefundRequest: {
+            /** Payment Id */
+            payment_id: string;
+            /** Amount */
+            amount?: number | string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Client Request Id */
+            client_request_id: string;
         };
         /**
          * SessionCard
@@ -1351,6 +1460,39 @@ export interface operations {
             };
         };
     };
+    get_stats_api_admin_invoices_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                "__Host-session"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_invoices_api_admin_invoices_get: {
         parameters: {
             query?: never;
@@ -1384,7 +1526,7 @@ export interface operations {
             };
         };
     };
-    create_invoice_api_admin_invoices_post: {
+    create_invoice_endpoint_api_admin_invoices_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1393,7 +1535,11 @@ export interface operations {
                 "__Host-session"?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvoiceCreateRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -1452,7 +1598,7 @@ export interface operations {
             };
         };
     };
-    record_manual_payment_api_admin_invoices__invoice_id__manual_payment_post: {
+    record_manual_payment_endpoint_api_admin_invoices__invoice_id__manual_payment_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1463,7 +1609,11 @@ export interface operations {
                 "__Host-session"?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualPaymentRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -1487,7 +1637,7 @@ export interface operations {
             };
         };
     };
-    refund_payment_api_admin_invoices__invoice_id__refund_post: {
+    refund_payment_endpoint_api_admin_invoices__invoice_id__refund_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1498,7 +1648,11 @@ export interface operations {
                 "__Host-session"?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -1522,7 +1676,7 @@ export interface operations {
             };
         };
     };
-    invoice_unpaid_for_session_api_admin_invoices_admin_sessions__class_session_id__invoice_unpaid_post: {
+    invoice_unpaid_for_session_api_admin_sessions__class_session_id__invoice_unpaid_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1557,12 +1711,12 @@ export interface operations {
             };
         };
     };
-    get_invoice_by_pay_token_api_invoices_pay__pay_token__get: {
+    get_invoice_status_api_pay__token__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                pay_token: string;
+                token: string;
             };
             cookie?: never;
         };
@@ -1590,12 +1744,12 @@ export interface operations {
             };
         };
     };
-    create_stripe_intent_api_invoices_pay__pay_token__stripe_intent_post: {
+    check_payment_methods_api_pay__token__payment_methods_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                pay_token: string;
+                token: string;
             };
             cookie?: never;
         };
@@ -1623,12 +1777,12 @@ export interface operations {
             };
         };
     };
-    create_paypal_order_api_invoices_pay__pay_token__paypal_order_post: {
+    create_stripe_intent_api_pay__token__stripe_intent_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                pay_token: string;
+                token: string;
             };
             cookie?: never;
         };
@@ -1656,12 +1810,45 @@ export interface operations {
             };
         };
     };
-    capture_paypal_order_api_invoices_pay__pay_token__paypal_order__order_id__capture_post: {
+    create_paypal_order_endpoint_api_pay__token__paypal_order_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                pay_token: string;
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    capture_paypal_order_endpoint_api_pay__token__paypal_order__order_id__capture_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
                 order_id: string;
             };
             cookie?: never;
@@ -1690,28 +1877,6 @@ export interface operations {
             };
         };
     };
-    get_payment_methods_api_invoices_pay_payment_methods_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
     stripe_webhook_api_webhooks_stripe_post: {
         parameters: {
             query?: never;
@@ -1728,7 +1893,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: unknown;
+                        [key: string]: string;
                     };
                 };
             };
@@ -2146,7 +2311,7 @@ export interface operations {
             };
         };
     };
-    upload_waiver_api_admin_waivers_students__student_id__post: {
+    upload_waiver_endpoint_api_admin_waivers_students__student_id__post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2159,7 +2324,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_upload_waiver_api_admin_waivers_students__student_id__post"];
+                "multipart/form-data": components["schemas"]["Body_upload_waiver_endpoint_api_admin_waivers_students__student_id__post"];
             };
         };
         responses: {

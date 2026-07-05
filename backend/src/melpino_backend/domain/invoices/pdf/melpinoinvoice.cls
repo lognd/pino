@@ -1,4 +1,4 @@
-% melpinoinvoice.cls -- custom LaTeX document class for Mel Pino's
+% melpinoinvoice.cls -- custom LaTeX document class for this business's
 % professional invoice PDFs. Deliberately NOT styled like the website
 % (Gruvbox/monospace/glitch aesthetic) -- an invoice is a financial/legal
 % document, printed and archived, not a piece of site branding, so this is
@@ -6,7 +6,7 @@
 % domain/invoices/pdf/renderer.py's doc comment for the "why LaTeX at all"
 % context).
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesClass{melpinoinvoice}[2026/07/01 Mel Pino professional invoice class]
+\ProvidesClass{melpinoinvoice}[2026/07/01 melpino professional invoice class]
 \LoadClass[11pt,a4paper]{article}
 
 \RequirePackage[margin=1in]{geometry}
@@ -47,7 +47,7 @@
 \RequirePackage{hyperref}
 
 % A restrained navy/gray pair -- reads as "professional invoice," not
-% "Mel Pino the website." Colored links print fine in black-and-white
+% "the brand website." Colored links print fine in black-and-white
 % too (they just render as a slightly different gray), so this never
 % depends on a color printer to stay legible.
 \definecolor{invoiceaccent}{HTML}{1F2A44}

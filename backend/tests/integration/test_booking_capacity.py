@@ -102,6 +102,26 @@ async def test_concurrent_last_seat_race(_pg_url: str, app_config: AppConfig) ->
         assert len(errs) == 1
         assert errs[0].danger_err is BookingError.SessionFull
     finally:
+        # This test commits for real against the shared session-scoped
+        # _pg_url container (true concurrency needs two independent
+        # connections, which the rolled-back-per-test db_session fixture
+        # can't provide) -- clean up the rows it created so they don't leak
+        # into a later test's unscoped aggregate query (found via
+        # test_booking_source_metrics.py's whole-table totals assertion
+        # failing only when this test ran first in the same session).
+        from sqlalchemy import delete
+
+        from melpino_backend.db.models.bookings import Booking
+
+        async with sessionmaker() as cleanup:
+            await cleanup.execute(
+                delete(Booking).where(Booking.session_id == session_id)
+            )
+            await cleanup.execute(
+                delete(ClassSession).where(ClassSession.id == session_id)
+            )
+            await cleanup.execute(delete(Course).where(Course.id == course.id))
+            await cleanup.commit()
         await engine.dispose()
 
 

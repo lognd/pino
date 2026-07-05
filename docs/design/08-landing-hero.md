@@ -35,31 +35,59 @@ shatter was too uniform. The following are now hard requirements:
   layered bloom with a hot white core and brief red rim, subtle film
   grain/vignette over the whole hero field, no confetti-like sparks.
   If a detail cannot be made to look deliberate, cut it.
-- REVISION 3 (user verdict on the first Revision-2 pass: casing and
-  flash "still look childish"): both need a real art-direction pass.
-  The FLASH: no cartoon starburst -- a 2-3 frame-equivalent sliver of
-  the timeline where exposure blows out (whole field lifts), a hot
-  elongated core with proper falloff (inverse-square-ish gradient
-  stops, slight horizontal anamorphic stretch), a one-frame red rim,
-  then instant decay into drifting smoke + lingering rim light. The
-  CASING: small, fast, and specular -- correct relative scale (a 9mm
-  case is TINY against a viewport wordmark; err small), rendered as
-  a brass-toned capsule with a bright specular glint line and rim
-  highlight, motion-stretched along its velocity when moving fast,
-  visible tumble via its silhouette (foreshortened ellipse cycle),
-  entering hot and decelerating believably. Palette exception
-  granted: a desaturated brass (one muted gold tone) is permitted
-  for the casing only. If after honest effort the casing still reads
-  cheap, drop it below the fold of perception (near-subliminal
-  speed/size) rather than shipping a cartoon.
+- REVISION 4 (user verdict on Revision 3: flash is "still giving
+  flash game vibes" and "needs A LOT OF WORK"; casing "doesn't look
+  good at all"):
+  - **The CASING IS REMOVED. Do not re-add it.** The sequence is
+    light, smoke, and the breaking wordmark only.
+  - The FLASH gets a ground-up rework. Reference: real low-light
+    muzzle-flash photography (harsh, brief, mostly OVEREXPOSURE and
+    rim light, almost never a visible fireball shape). Build it as
+    light-on-the-scene, not an object: a sub-perceptual bloom at the
+    off-frame origin, a hard single-beat exposure lift of the whole
+    field, rim/edge light raking the wordmark from the origin side
+    (per-shard edge highlight, brightest on origin-facing edges),
+    short-lived atmospheric glow in the smoke, then decay. No drawn
+    starburst, no petal shapes, no lens-flare streaks. Iterate in
+    /hero-lab against the question "could this be a frame from a
+    film" -- if any element has a nameable cartoon shape, cut it.
+    Respect the photosensitivity guard above.
+  - The mid-sequence VISUAL GLITCH must die: current build shows the
+    field "crash" (visible discontinuity/artifact) around halfway
+    through, in both scrub directions. Reproduce with hero-lab's
+    manual progress slider (render is pure -- it is deterministic),
+    find the discontinuity (suspects: gradient transform overflow,
+    alpha wrap-around, smoke parameterization kink at the flash
+    boundary), fix, and add a regression unit test asserting field
+    continuity (sample the pure scene parameters across progress and
+    assert no step exceeds a bound).
 
-- Cursor maps to progress across an INNER ACTIVE BAND, not the full
-  viewport: the band spans the central region of the hero, inset at
-  least 15% of hero width from each side (tune in /hero-lab). Cursor
-  left of the band clamps to 0, right of it clamps to 1; vertical
-  position is ignored but the pointer must be over the hero section
-  at all for scrubbing to engage. Move right, the shot advances;
-  move left, it reverses.
+- REVISION 4 (supersedes the position-scrub model entirely; binding
+  user feedback): progress is NOT mapped to cursor X anymore.
+  **Activity-driven playback**: while the pointer is over the hero
+  and MOVING ("someone is playing with the cursor" -- detect via a
+  smoothed movement-energy accumulator over recent pointer velocity),
+  the sequence PLAYS FORWARD, rate scaling gently with energy
+  (capped; vigorous shaking must not strobe it). No movement for a
+  while (idle threshold ~6s -- the old 3s was "a little short") ->
+  it eases back home to 0 and the wordmark reassembles (keep the
+  4-6s ease-out settle).
+- **Break-on-reach**: the instant the pointer (or a touch) first
+  enters the WORDMARK's own bounds, the shot fires -- progress ramps
+  quickly (fast ease, not a hard cut) to just past SHOT_MOMENT so
+  the lockup visibly starts breaking the moment you touch it.
+  Continued movement drives further disintegration; stillness
+  returns it whole.
+- SHOT_MOMENT moves EARLIER in the timeline (target ~0.18-0.25;
+  tune in /hero-lab) and the flash occupies a SHORTER progress span.
+  Photosensitivity guard (hard requirement, WCAG 2.3.1): at most one
+  flash event per engagement cycle, luminance transition eased over
+  >= 150ms of wall-clock time regardless of how fast progress moves
+  (clamp the flash's dL/dt at render), no repeated strobing under
+  jittery input.
+- Touch: entering the viewport plays one slow forward pass; touching
+  the wordmark triggers break-on-reach; stillness settles home. No
+  scroll hijacking, ever.
 - The mapping is EASED, not linear: cursor position feeds a target
   progress; displayed progress chases it with critically-damped
   smoothing (spring or exponential smoothing, ~200-350ms settle) so
@@ -154,13 +182,19 @@ export interface ScrubSource {
   its length, deviating 20-45deg, shorter; secondaries may spawn
   tertiaries near the impact. Shards are the cells of this branched
   network (near-impact cells small and splintery, periphery large
-  slabs). RENDER THE CRACKS: during shatter, hairline strokes
-  (mp-white at low alpha, brighter near impact) trace the network on
-  the lockup as separation grows -- the visible branching is what
-  sells glass. Per-shard motion keeps Revision 2's stagger/rotation/
-  scale/opacity depth cues along the (now kinked) radial paths.
-  Purity and determinism rules unchanged; identity now required at
-  p = 0 only (see the envelope rule above).
+  slabs). REVISION 4: the hairline CRACK OVERLAY IS REMOVED (user
+  verdict: "looks terrible") -- shard separation alone tells the
+  story; do not re-add stroked crack lines. And a rendering bug
+  becomes a hard rule: **no shard boundary may be visible at rest.**
+  The current build leaks "break-lines" (clip-path antialiasing
+  seams) before any shatter. Fix: render the WHOLE unsplit lockup
+  whenever shatter == 0 and mount the shard layer only once
+  separation begins; give shard edges sub-pixel overlap/bleed so
+  mid-shatter gaps read as glass, not SVG seams. Regression test:
+  at progress 0 the shard layer is not mounted. Per-shard motion
+  keeps the stagger/rotation/scale/opacity depth cues along the
+  kinked radial paths. Purity and determinism rules unchanged;
+  identity required at p = 0 only (see the envelope rule above).
 - `hero/Bullethole.tsx` + `hero/useBulletholeClicks.ts` (Revision 2,
   NEW) -- click feedback for interactive elements site-wide: on
   pointerdown on an opted-in element (nav links, CTA buttons), spawn
@@ -173,6 +207,17 @@ export interface ScrubSource {
   prefers-reduced-motion (no effect at all). Exported from hero/ but
   wired into Shell/BigButton by the app layer, so hero/ stays
   standalone. Zero effect on a11y: purely decorative, aria-hidden.
+  REVISION 4 quality bar (user: "needs the fractal pattern touchup
+  and some TLC; really work hard and make these components look
+  realistic and good"): the 5-8 straight cracks read cheap. Rebuild
+  as layered glass damage: irregular dark core (jittered polygon,
+  not a circle), bright crushed ring around it, kinked BRANCHING
+  radial cracks (reuse the wordmark's recursive polyline generator
+  family -- share the branching math, do not duplicate it), a few
+  short tangential connector cracks between radials near the core,
+  per-crack opacity variance, all seeded from click position so no
+  two holes repeat. Subtle ~80ms pop-in, then slow fade. Footprint
+  stays small (roughly 48-72px), decorative-only.
 - `hero/Hero.tsx` -- composition + lazy init + fallback logic.
 
 ## Degradation ladder (each rung REQUIRED)
@@ -199,13 +244,18 @@ export interface ScrubSource {
 
 ## Acceptance criteria (the prototype demo checklist)
 
-- Scrub right/left advances/reverses smoothly; parking full-right
-  holds the lockup shattered; releasing the pointer anywhere parks
-  briefly, then the sequence settles back to 0 and the wordmark
-  visibly reassembles (Revision 3 idle rule).
-- The crack pattern reads as branched broken glass (kinked polyline
-  cracks with secondary/tertiary branches, hairlines rendered during
-  separation) -- never straight spokes.
+- REVISION 4 acceptance: cursor play (movement over the hero) drives
+  the sequence forward smoothly; touching the wordmark starts the
+  break immediately; ~6s of stillness eases everything back together;
+  vigorous shaking neither strobes the flash nor exceeds the
+  photosensitivity guard.
+- No shard boundary visible at rest; no crack-line overlay anywhere;
+  no casing; no mid-sequence visual discontinuity in either
+  direction (regression-tested).
+- /hero-lab exposes selectable FLASH PROTOTYPE ALTERNATIVES (2-3
+  distinct, each finished-looking -- different treatments of the
+  exposure/rim-light idea, all within the guard) so a human can pick;
+  the chosen default ships, alternates stay selectable in the lab.
 - The blast reads as fired from a consistent point just off-frame
   (directional spill, casing entry, smoke all agree on the origin);
   no weapon imagery is drawn. Scrub only engages inside the inset

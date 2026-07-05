@@ -101,12 +101,15 @@ equivalent always accompanies it.
   select2-style widgets -- native controls, big.
 - Status is text + color, never a bare dot ("PAID" chip, "4 seats
   open").
-- **Backlink home on every non-landing page** (binding user
-  feedback, 2026-07-04): the wordmark-logo link alone is not enough
-  for this audience. Every page except `/` carries an explicit
-  plain-text "Home" link -- first item in the primary nav, plus a
-  "Back to home" text link near the top of tokenized/dead-end pages
-  (manage booking, pay, legal, not-found states).
+- **Backlink home** (REVISED per user feedback round 3 -- he
+  disliked the plain-text "Home" nav item): the home affordance is
+  the MEL PINO wordmark logo at the VERY LEFT of the nav bar,
+  linking to `/`, shown on every page EXCEPT the landing page
+  (where the hero already owns the lockup; no duplicate logo in the
+  bar there). Remove the "Home" text item from the primary nav.
+  Dead-end/tokenized pages (manage booking, pay, legal, not-found
+  states) keep their explicit "Back to home" text links -- the
+  elderly bar still applies where users get stranded.
 - No hover-only reveals, no auto-advancing carousels, no toasts for
   errors a user must act on (inline, persistent), no timeouts that
   discard a half-filled form.

@@ -35,6 +35,7 @@ the doc here is the source of truth.
 | Unit/integration/system tests for any component | [12-testing-strategy.md](12-testing-strategy.md) |
 | File storage (waivers, course PDFs, hero media), local vs. R2 | [13-storage-abstraction.md](13-storage-abstraction.md) |
 | The admin/business app mockup (MSW fake data) | [14-admin-mockup.md](14-admin-mockup.md) |
+| The carousel, gallery page, R2 media serving, click-to-play video | [15-media-and-gallery.md](15-media-and-gallery.md) |
 
 **Every component is required to have unit, integration, and end-to-end
 system tests -- backend and frontend both.**

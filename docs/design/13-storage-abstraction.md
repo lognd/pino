@@ -25,6 +25,12 @@ waivers/{student_id}/{waiver_id}.{ext}      -- PRIVATE. Legal PII.
 payment-proofs/{invoice_id}/{proof_id}.{ext}-- PRIVATE (copy logand).
 course-media/{course_slug}/*                -- public-ok (photos,
                                                syllabus PDFs).
+gallery/*                                   -- public: gallery page
+                                               images/video + thumbs
+                                               (see 15-media-and-
+                                               gallery.md), immutable
+                                               hash-suffixed keys,
+                                               long cache-control.
 brand/hero/*                                -- public: the future real
                                                hero clip + poster
                                                (see 08), long

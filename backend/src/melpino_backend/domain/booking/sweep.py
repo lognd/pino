@@ -5,7 +5,10 @@ from __future__ import annotations
 # docs/design/04-booking-and-scheduling.md's scheduler section:
 #   1. send `reminder` emails for sessions starting within
 #      reminder_days_before (idempotent via the reminders_sent ledger),
-#   2. flip past published/full sessions to 'completed'.
+#   2. flip past published/full sessions to 'completed',
+#   3. reconcile any PayPal captures still stuck 'pending' (PayPal sends
+#      no webhook for capture completion -- see
+#      domain/invoices/service.py:reconcile_pending_paypal_captures).
 import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
@@ -13,6 +16,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import update
 
 from melpino_backend.db.models.class_sessions import ClassSession
+from melpino_backend.domain.invoices.service import reconcile_pending_paypal_captures
 from melpino_backend.domain.notifications.notify import send_due_reminders
 
 if TYPE_CHECKING:
@@ -44,15 +48,21 @@ async def flip_past_sessions_to_completed(db: "AsyncSession") -> int:
     return count
 
 
-async def run_daily_sweep(db: "AsyncSession", cfg: "AppConfig") -> tuple[int, int]:
+async def run_daily_sweep(db: "AsyncSession", cfg: "AppConfig") -> tuple[int, int, int]:
     """Runs the whole daily sweep in one transaction (the caller commits):
-    returns (reminders_sent, sessions_completed). Safe to re-run -- both
-    halves are idempotent (reminders via the ledger, completion via the
-    status guard)."""
+    returns (reminders_sent, sessions_completed, paypal_captures_reconciled).
+    Safe to re-run -- all three steps are idempotent (reminders via the
+    ledger, completion via the status guard, PayPal reconciliation via its
+    own per-payment row lock)."""
     logger.info("run_daily_sweep: starting")
     reminders = await send_due_reminders(db, cfg)
     completed = await flip_past_sessions_to_completed(db)
+    reconciled = await reconcile_pending_paypal_captures(db, cfg)
     logger.info(
-        "run_daily_sweep: done -- %d reminder(s), %d completed", reminders, completed
+        "run_daily_sweep: done -- %d reminder(s), %d completed, "
+        "%d paypal capture(s) reconciled",
+        reminders,
+        completed,
+        reconciled,
     )
-    return reminders, completed
+    return reminders, completed, reconciled

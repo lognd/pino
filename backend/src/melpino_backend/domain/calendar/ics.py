@@ -34,6 +34,7 @@ def escape_text(value: str) -> str:
         .replace(",", "\\,")
         .replace("\r\n", "\\n")
         .replace("\n", "\\n")
+        .replace("\r", "\\n")
     )
 
 

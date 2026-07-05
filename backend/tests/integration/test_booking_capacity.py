@@ -187,11 +187,11 @@ async def test_reminder_ledger_idempotency(
     )
     await make_booking(session_id=session.id)
 
-    first_sent, _ = await run_daily_sweep(db_session, mail_config)
+    first_sent, _, _ = await run_daily_sweep(db_session, mail_config)
     assert first_sent == 1
     assert len(fake_smtp.messages) == 1
 
-    second_sent, _ = await run_daily_sweep(db_session, mail_config)
+    second_sent, _, _ = await run_daily_sweep(db_session, mail_config)
     assert second_sent == 0
     assert len(fake_smtp.messages) == 1
 

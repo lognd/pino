@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-# Daily loop: reminders + session-status sweeps -- see
-# docs/design/04-booking-and-scheduling.md's scheduler section. CRIB:
-# logand.app backend/src/logand_backend/scripts/scheduler.py (same
+# Daily loop: reminders + session-status sweeps + PayPal pending-capture
+# reconciliation -- see docs/design/04-booking-and-scheduling.md's
+# scheduler section. CRIB: logand.app
+# backend/src/logand_backend/scripts/scheduler.py (same
 # sleep-until-04:00-UTC loop pattern; no system cron since the Docker
-# image runs as a non-root user). PayPal reconciliation rides along here
-# in logand; melpino adds it in P4 (payments), not P3.
+# image runs as a non-root user).
 import argparse
 import asyncio
 from datetime import datetime, time, timedelta, timezone
@@ -42,12 +42,14 @@ async def main_loop() -> None:
             db_base.init_engine(cfg.database_url)
             session = db_base.get_session()
             try:
-                reminders, completed = await run_daily_sweep(session, cfg)
+                reminders, completed, reconciled = await run_daily_sweep(session, cfg)
                 await session.commit()
                 log.info(
-                    "daily sweep complete: %d reminder(s), %d session(s) completed",
+                    "daily sweep complete: %d reminder(s), %d session(s) completed, "
+                    "%d paypal capture(s) reconciled",
                     reminders,
                     completed,
+                    reconciled,
                 )
             finally:
                 await session.close()

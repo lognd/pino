@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "react-router-dom";
 import { CONTENT } from "../../../content/mock";
+import { BackHomeLink } from "../../../components/BackHomeLink";
 import { PhoneFallbackNote } from "../../../components/PhoneFallbackNote";
 import { BigButton } from "../../../components/BigButton";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -134,6 +135,7 @@ export function Pay() {
   if (!token) {
     return (
       <main className="mx-auto max-w-2xl px-4 py-12">
+        <BackHomeLink className="mb-6" />
         <h1 className="font-display text-4xl font-extrabold italic uppercase text-mp-white">{T.heading}</h1>
         <p className="mt-6 text-lg text-mp-red-text">This link is missing its invoice code.</p>
       </main>
@@ -143,6 +145,7 @@ export function Pay() {
   if (paypalOrderId) {
     return (
       <main className="mx-auto max-w-2xl px-4 py-12">
+        <BackHomeLink className="mb-6" />
         <h1 className="font-display text-4xl font-extrabold italic uppercase text-mp-white">
           {T.paypalFinishingHeading}
         </h1>
@@ -167,6 +170,7 @@ export function Pay() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12">
+      <BackHomeLink className="mb-6" />
       <h1 className="font-display text-4xl font-extrabold italic uppercase text-mp-white">{T.heading}</h1>
 
       {invoiceQuery.isLoading && <p className="mt-6 text-lg text-mp-white">Loading your invoice...</p>}

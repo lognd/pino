@@ -1,33 +1,48 @@
 // Pure shard geometry + transform math for the reactive wordmark --
-// docs/design/08-landing-hero.md (Revision 2). Kept DOM-free so purity and
-// the reassemble-at-extremes contract are unit-testable without rendering SVG.
+// docs/design/08-landing-hero.md (Revision 3). Kept DOM-free so purity and
+// the reassemble-at-0 contract are unit-testable without rendering SVG.
 //
-// SHATTER RULE (resolution of a genuine contradiction in doc 08):
-//   Doc 08 says both (a) "displacement proportional to |progress -
-//   SHOT_MOMENT|" AND (b) fragments "reassemble to a pixel-perfect lockup
-//   at progress extremes" (0 and 1). Read literally, (a) makes displacement
-//   MAXIMAL at the extremes, contradicting (b). We encode a SIDE-NORMALIZED
-//   tent that IS a pure function of |progress - SHOT_MOMENT| yet is zero at
-//   both extremes and peaks at SHOT_MOMENT:
+// SHATTER ENVELOPE (Revision 3 -- supersedes Revision 2's tent rule; binding
+// user feedback: "keep the shatter effect when the cursor is all the way to
+// the right; on inaction, the Mel Pino should come back together"):
 //
-//     u = |progress - SHOT_MOMENT| / (progress < SHOT_MOMENT
-//                                       ? SHOT_MOMENT
-//                                       : 1 - SHOT_MOMENT)      // u in [0,1]
-//     shatter = smoothstep(1 - u)     // 1 at the shot, 0 at each extreme
+//     shatter(p) = 0                                          for p <= SHOT_MOMENT
+//                = smoothstep((p - SHOT_MOMENT)/(1 - SHOT))   rising to 1 at p = 1
 //
-// RADIAL-CRACK TESSELLATION (Revision 2): uniform triangle grids read as
-// cheap ("flash game"). The lockup is instead fractured like laminated glass
-// around an IMPACT POINT (roughly where the off-frame origin points, see
-// timeline.ts ORIGIN_*): rays radiate from the impact to the field boundary
-// (corner rays inserted so every sector base is a single straight edge, which
-// keeps the union EXACTLY the rect -> pixel-perfect reassembly), then each
-// sector is split radially into bands -- small fragments near the impact,
-// larger slabs at the periphery, long slivers inside thin sectors. Per-shard
-// motion is displacement ALONG the radial vector from the impact, with a
-// deterministic stagger (nearer impact = earlier + farther), rotation up to
-// ~25deg, scale 0.92-1.06, and opacity falloff. All randomness is seeded ONCE
-// from the shard index, so shardTransform is a pure function of (progress,
-// shard) -- determinism and extremes-identity are unchanged.
+//   The envelope HOLDS at full (1) at the right extreme -- parking the cursor
+//   full-right leaves the lockup blown apart. It is monotone non-decreasing
+//   everywhere, and equals 0 (pixel-perfect identity) ONLY at p = 0. Idle
+//   settle-home always eases to 0 (scrubMachine.ts), so on inaction MEL PINO
+//   drifts back together every time. Still a pure function of progress.
+//
+// BRANCHED, FRACTAL-LIKE CRACK NETWORK (Revision 3 -- user verdict on the
+// Revision 2 radial tessellation: "just lines", "need to be more branchy and
+// fractal-like"): instead of straight spokes, the lockup fractures around an
+// IMPACT POINT (timeline.ts ORIGIN_*) into a recursively branched network:
+//
+//   * PRIMARY cracks radiate from the impact as KINKED POLYLINES (3-6 segments
+//     each, per-segment angular jitter -- never one straight line). Each stays
+//     inside its own angular wedge (lateral deviation bounded by the gap to its
+//     neighbours), so primaries never cross -> the cells they bound tile the
+//     rect exactly at p = 0 (union = rect, no gaps/overlaps; T-junctions across
+//     a shared primary are harmless -- both sides trace the identical polyline).
+//   * SECONDARY branches (1-3 per primary) split off at random points, deviate
+//     20-45deg, and are shorter and kinked. TERTIARY branches spawn near the
+//     impact off near-impact secondaries. Secondaries/tertiaries are RENDERED
+//     as hairlines (Wordmark.tsx) but do not subdivide cells -- the branchy
+//     visible network is what sells glass.
+//   * SHARDS are the cells of the primary network: an angular sector between
+//     two adjacent kinked primaries, split into radial BANDS at the union of
+//     both primaries' kink parameters (so every sector-boundary cell edge
+//     follows a real kinked crack polyline, not a straight chord) plus a couple
+//     of near-impact splits (splintery near the impact, large slabs at the
+//     periphery).
+//
+// Per-shard motion keeps Revision 2's depth cues -- displacement ALONG the
+// radial vector from the impact, deterministic stagger (nearer-impact shards
+// lead and travel farther), rotation, scale, opacity falloff -- now along the
+// kinked paths. All randomness is seeded ONCE from indices, so buildShards and
+// shardTransform are pure/deterministic.
 
 import { SHOT_MOMENT, ORIGIN_FY } from "./timeline";
 
@@ -41,13 +56,13 @@ export const VIEW_H = 240;
 export const DEFAULT_IMPACT_FX = 0.16;
 export const DEFAULT_IMPACT_FY = ORIGIN_FY;
 
-/** Base radial rays before corner rays are inserted. */
-const RAY_COUNT = 13;
+/** Base radial primaries before the four corner primaries are inserted. */
+const RAY_COUNT = 8;
 
 /** Max per-shard translation in SVG user units (viewBox is 640x240). */
-const MAX_TRANSLATE = 160;
+const MAX_TRANSLATE = 170;
 /** Max per-shard rotation at full shatter, degrees. */
-const MAX_ROTATE_DEG = 25;
+const MAX_ROTATE_DEG = 26;
 /** Opacity floor at full shatter (motion-blur-suggesting falloff). */
 const MIN_OPACITY = 0.42;
 
@@ -59,7 +74,7 @@ export interface Point {
 /** One glass fragment: its polygon plus the impact-relative data driving its
  * pure transform. */
 export interface Shard {
-  /** Polygon vertices (3 for the innermost band, 4 for outer bands). */
+  /** Polygon vertices (3 for an innermost apex cell, 4 for outer bands). */
   points: Point[];
   /** Centroid (rotation/scale pivot). */
   cx: number;
@@ -73,23 +88,26 @@ export interface Shard {
   seed: number;
 }
 
+/** One polyline in the rendered crack network. */
+export interface Crack {
+  /** Polyline vertices (>= 2). */
+  points: Point[];
+  /** 1 = primary, 2 = secondary, 3 = tertiary. */
+  generation: 1 | 2 | 3;
+  /** Brightness hint in [0,1]: higher = nearer the impact (brighter stroke). */
+  intensity: number;
+}
+
 export interface ShardTransform {
-  /** Translation x in SVG user units. */
   tx: number;
-  /** Translation y in SVG user units. */
   ty: number;
-  /** Rotation in degrees (about the shard centroid, applied by caller). */
   rot: number;
-  /** Uniform scale factor (about the shard centroid). */
   scale: number;
-  /** Opacity in [MIN_OPACITY, 1]. */
   opacity: number;
 }
 
 export interface BuildShardsOptions {
-  /** Impact x as a fraction of the field width (default DEFAULT_IMPACT_FX). */
   impactFx?: number;
-  /** Impact y as a fraction of the field height (default DEFAULT_IMPACT_FY). */
   impactFy?: number;
 }
 
@@ -112,17 +130,17 @@ function smoothstep(t: number): number {
   return x * x * (3 - 2 * x);
 }
 
-/** Shatter amount in [0,1]: peaks (1) at SHOT_MOMENT, 0 at progress 0 and 1.
- * Exported for tests and for the source to share the same envelope. */
+/** Shatter amount in [0,1]: 0 for p <= SHOT_MOMENT, then smoothstep-rising to
+ * a FULL, HELD 1 at p = 1 (Revision 3 envelope). Monotone non-decreasing; 0
+ * only at p = 0. Exported for tests, for the wordmark's crack opacity, and for
+ * the source to share the same envelope. */
 export function shatterAmount(progress: number): number {
   const p = clamp01(progress);
-  const dist = Math.abs(p - SHOT_MOMENT);
-  const half = p < SHOT_MOMENT ? SHOT_MOMENT : 1 - SHOT_MOMENT;
-  const u = half > 0 ? dist / half : 0;
-  return smoothstep(1 - u);
+  if (p <= SHOT_MOMENT) return 0;
+  return smoothstep((p - SHOT_MOMENT) / (1 - SHOT_MOMENT));
 }
 
-/** First positive intersection of the ray from `origin` in unit direction
+/** First positive intersection of the ray from (ox,oy) in unit direction
  * (dx,dy) with the [0,W]x[0,H] rect boundary. */
 function rayToBoundary(ox: number, oy: number, dx: number, dy: number): Point {
   let best = Infinity;
@@ -141,22 +159,130 @@ function rayToBoundary(ox: number, oy: number, dx: number, dy: number): Point {
   return { x: ox + dx * best, y: oy + dy * best };
 }
 
-/** Build the glass fracture ONCE (deterministic). Returns the impact point and
- * the fragment list; the union of the fragments is exactly the field rect. */
+/** A kinked primary crack: a radial polyline from impact (t=0) to a boundary
+ * point (t=1). `params[i]` is the radius fraction t at vertex i (ascending). */
+interface Primary {
+  angle: number;
+  R: number;
+  points: Point[];
+  params: number[];
+}
+
+/** Shortest circular distance between two angles in [0, 2pi). */
+function circularGap(a: number, b: number): number {
+  let d = Math.abs(a - b) % (Math.PI * 2);
+  if (d > Math.PI) d = Math.PI * 2 - d;
+  return d;
+}
+
+/** Evaluate a primary polyline at radius fraction f in [0,1]. */
+function evalPrimary(prim: Primary, f: number): Point {
+  const ff = clamp01(f);
+  const { params, points } = prim;
+  for (let i = 1; i < params.length; i++) {
+    if (ff <= params[i] + 1e-9) {
+      const t0 = params[i - 1];
+      const t1 = params[i];
+      const u = t1 > t0 ? (ff - t0) / (t1 - t0) : 0;
+      const a = points[i - 1];
+      const b = points[i];
+      return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
+    }
+  }
+  return points[points.length - 1];
+}
+
+/** Build one kinked primary crack in its angular wedge. Lateral (angular)
+ * deviation is bounded by 0.35 * neighbour gap and vanishes at both ends, so
+ * the polyline stays strictly inside its wedge (no crossing) with its endpoint
+ * pinned exactly on the boundary. */
+function buildPrimary(
+  ix: number,
+  iy: number,
+  angle: number,
+  gap: number,
+  seed: number,
+): Primary {
+  const boundary = rayToBoundary(ix, iy, Math.cos(angle), Math.sin(angle));
+  const R = Math.hypot(boundary.x - ix, boundary.y - iy);
+  // 2..5 interior kinks -> 3..6 segments.
+  const kinks = 2 + Math.floor(hash01(seed * 7 + 1) * 4);
+  const points: Point[] = [{ x: ix, y: iy }];
+  const params: number[] = [0];
+  const latMax = gap * 0.35;
+  for (let j = 1; j <= kinks; j++) {
+    // Evenly spaced interior params with jitter, kept strictly ascending.
+    const base = j / (kinks + 1);
+    const t = clamp01(base + (hash01(seed * 13 + j) - 0.5) * (0.5 / (kinks + 1)));
+    const env = Math.sin(Math.PI * t); // 0 at both ends -> pins endpoints.
+    const da = (hash01(seed * 17 + j) - 0.5) * 2 * latMax * env;
+    const dir = angle + da;
+    const rho = t * R;
+    points.push({ x: ix + Math.cos(dir) * rho, y: iy + Math.sin(dir) * rho });
+    params.push(t);
+  }
+  points.push(boundary);
+  params.push(1);
+  // Guard strict ascendance of params (defensive against jitter collisions).
+  for (let i = 1; i < params.length; i++) {
+    if (params[i] <= params[i - 1]) params[i] = Math.min(1, params[i - 1] + 1e-4);
+  }
+  return { angle, R, points, params };
+}
+
+/** Local unit direction of a primary at radius fraction f (for branching). */
+function primaryDirection(prim: Primary, f: number): { x: number; y: number } {
+  const a = evalPrimary(prim, Math.max(0, f - 0.03));
+  const b = evalPrimary(prim, Math.min(1, f + 0.03));
+  let dx = b.x - a.x;
+  let dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  dx /= len;
+  dy /= len;
+  return { x: dx, y: dy };
+}
+
+/** Build a short kinked branch polyline from a start point along a direction. */
+function buildBranch(
+  start: Point,
+  dirX: number,
+  dirY: number,
+  length: number,
+  segs: number,
+  seed: number,
+): Point[] {
+  const pts: Point[] = [start];
+  let x = start.x;
+  let y = start.y;
+  let ang = Math.atan2(dirY, dirX);
+  const step = length / segs;
+  for (let i = 1; i <= segs; i++) {
+    ang += (hash01(seed * 19 + i) - 0.5) * 0.5; // per-segment angular jitter.
+    x += Math.cos(ang) * step;
+    y += Math.sin(ang) * step;
+    pts.push({ x, y });
+  }
+  return pts;
+}
+
+/** Build the glass fracture ONCE (deterministic). Returns the impact point,
+ * the fragment list (union = the field rect at rest), and the rendered crack
+ * network (primaries + secondary/tertiary branches). */
 export function buildShards(options: BuildShardsOptions = {}): {
   impact: Point;
   shards: Shard[];
+  cracks: Crack[];
 } {
   const ix = clamp01(options.impactFx ?? DEFAULT_IMPACT_FX) * VIEW_W;
   const iy = clamp01(options.impactFy ?? DEFAULT_IMPACT_FY) * VIEW_H;
   const impact: Point = { x: ix, y: iy };
 
-  // Angles: jittered base rays + rays straight at each corner (so no sector
-  // base ever straddles a corner -> every base is one straight edge segment).
-  const angles: number[] = [];
+  // Angles: jittered base rays + one ray straight at each corner (so no sector
+  // ever straddles a corner -> every outer band edge lies on the rect edge).
+  const rawAngles: number[] = [];
   for (let i = 0; i < RAY_COUNT; i++) {
-    const jitter = (hash01(i * 2 + 1) - 0.5) * ((Math.PI * 2) / RAY_COUNT) * 0.7;
-    angles.push((i / RAY_COUNT) * Math.PI * 2 + jitter);
+    const jitter = (hash01(i * 2 + 1) - 0.5) * ((Math.PI * 2) / RAY_COUNT) * 0.6;
+    rawAngles.push((i / RAY_COUNT) * Math.PI * 2 + jitter);
   }
   const corners: Point[] = [
     { x: 0, y: 0 },
@@ -164,21 +290,23 @@ export function buildShards(options: BuildShardsOptions = {}): {
     { x: VIEW_W, y: VIEW_H },
     { x: 0, y: VIEW_H },
   ];
-  for (const c of corners) angles.push(Math.atan2(c.y - iy, c.x - ix));
-  // Normalize to [0,2pi) and sort into a fan.
-  const norm = angles.map((a) => ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2));
-  norm.sort((a, b) => a - b);
+  for (const c of corners) rawAngles.push(Math.atan2(c.y - iy, c.x - ix));
+  const angles = rawAngles
+    .map((a) => ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2))
+    .sort((a, b) => a - b);
 
-  // Boundary hit for each ray.
-  const bounds: Point[] = norm.map((a) =>
-    rayToBoundary(ix, iy, Math.cos(a), Math.sin(a)),
-  );
+  const n = angles.length;
+  const primaries: Primary[] = [];
+  for (let k = 0; k < n; k++) {
+    const prev = angles[(k - 1 + n) % n];
+    const next = angles[(k + 1) % n];
+    const gap = Math.min(circularGap(angles[k], prev), circularGap(angles[k], next));
+    primaries.push(buildPrimary(ix, iy, angles[k], gap, k + 1));
+  }
 
-  const maxR = Math.max(
-    ...bounds.map((b) => Math.hypot(b.x - ix, b.y - iy)),
-    1e-6,
-  );
+  const maxR = Math.max(...primaries.map((p) => p.R), 1e-6);
 
+  // --- cells: sector bands between adjacent kinked primaries -----------------
   const shards: Shard[] = [];
   const pushShard = (points: Point[], seed: number): void => {
     let cx = 0;
@@ -199,65 +327,89 @@ export function buildShards(options: BuildShardsOptions = {}): {
       dx = 1;
       dy = 0;
     }
-    shards.push({
-      points,
-      cx,
-      cy,
-      dirX: dx,
-      dirY: dy,
-      distNorm: clamp01(len / maxR),
-      seed,
-    });
+    shards.push({ points, cx, cy, dirX: dx, dirY: dy, distNorm: clamp01(len / maxR), seed });
   };
 
-  const n = norm.length;
   for (let k = 0; k < n; k++) {
-    const bk = bounds[k];
-    const bnext = bounds[(k + 1) % n];
+    const A = primaries[k];
+    const B = primaries[(k + 1) % n];
+    // Band params: union of both primaries' kink params (so sector-boundary
+    // edges follow the real kinked cracks), plus a couple of near-impact splits
+    // to make the inner cells small and splintery.
+    const set = new Set<number>([...A.params, ...B.params]);
+    set.add(0.045 + (hash01(k * 23 + 1) - 0.5) * 0.02);
+    set.add(0.11 + (hash01(k * 23 + 2) - 0.5) * 0.03);
+    const fs = [...set].filter((v) => v >= 0 && v <= 1).sort((a, b) => a - b);
 
-    // Radial split fractions along both sector edges (small near impact,
-    // growing outward: r_j = (j/K)^1.6 with a touch of jitter).
-    const kSplits = 2 + Math.floor(hash01(k * 5 + 3) * 3); // 2..4 bands.
-    const fracs: number[] = [];
-    for (let j = 1; j <= kSplits; j++) {
-      const base = Math.pow(j / kSplits, 1.6);
-      const jit = j < kSplits ? (hash01(k * 7 + j) - 0.5) * 0.08 : 0;
-      fracs.push(clamp01(base + jit));
-    }
-    fracs.sort((a, b) => a - b);
-    fracs[fracs.length - 1] = 1;
-
-    let prev = 0;
-    for (let j = 0; j < fracs.length; j++) {
-      const r = fracs[j];
-      const innerL = { x: ix + (bk.x - ix) * prev, y: iy + (bk.y - iy) * prev };
-      const innerR = {
-        x: ix + (bnext.x - ix) * prev,
-        y: iy + (bnext.y - iy) * prev,
-      };
-      const outerL = { x: ix + (bk.x - ix) * r, y: iy + (bk.y - iy) * r };
-      const outerR = {
-        x: ix + (bnext.x - ix) * r,
-        y: iy + (bnext.y - iy) * r,
-      };
+    for (let j = 1; j < fs.length; j++) {
+      const f0 = fs[j - 1];
+      const f1 = fs[j];
+      const aOuter = evalPrimary(A, f1);
+      const bOuter = evalPrimary(B, f1);
       const seed = k * 131 + j * 17 + 1;
-      if (prev === 0) {
-        // Innermost band collapses to a triangle at the impact apex.
-        pushShard([impact, outerR, outerL], seed);
+      if (f0 <= 1e-9) {
+        pushShard([impact, bOuter, aOuter], seed); // apex triangle.
       } else {
-        pushShard([innerL, innerR, outerR, outerL], seed);
+        const aInner = evalPrimary(A, f0);
+        const bInner = evalPrimary(B, f0);
+        pushShard([aInner, bInner, bOuter, aOuter], seed);
       }
-      prev = r;
     }
   }
 
-  return { impact, shards };
+  // --- rendered crack network: primaries + secondaries + tertiaries ----------
+  const cracks: Crack[] = [];
+  const intensityOf = (pts: Point[]): number => {
+    const mid = pts[Math.floor(pts.length / 2)];
+    const d = Math.hypot(mid.x - ix, mid.y - iy);
+    return clamp01(1 - d / maxR);
+  };
+  for (let k = 0; k < n; k++) {
+    const A = primaries[k];
+    cracks.push({ points: A.points, generation: 1, intensity: intensityOf(A.points) });
+    // 1..3 secondary branches off this primary.
+    const secCount = 1 + Math.floor(hash01(k * 29 + 3) * 3);
+    for (let s = 0; s < secCount; s++) {
+      const f = 0.25 + hash01(k * 31 + s * 3 + 1) * 0.55; // along the primary.
+      const start = evalPrimary(A, f);
+      const dir = primaryDirection(A, f);
+      const side = hash01(k * 31 + s * 3 + 2) < 0.5 ? 1 : -1;
+      const dev = ((20 + hash01(k * 31 + s * 3 + 3) * 25) * Math.PI) / 180; // 20-45deg.
+      const c = Math.cos(dev * side);
+      const sn = Math.sin(dev * side);
+      const bx = dir.x * c - dir.y * sn;
+      const by = dir.x * sn + dir.y * c;
+      const length = A.R * (0.15 + hash01(k * 37 + s) * 0.25);
+      const segs = 2 + Math.floor(hash01(k * 41 + s) * 2);
+      const branch = buildBranch(start, bx, by, length, segs, k * 53 + s * 7 + 1);
+      cracks.push({ points: branch, generation: 2, intensity: intensityOf(branch) });
+      // Tertiary near the impact only (small f).
+      if (f < 0.45 && hash01(k * 43 + s) < 0.6) {
+        const tf = 0.4 + hash01(k * 47 + s) * 0.4;
+        const tStart = {
+          x: branch[0].x + (branch[branch.length - 1].x - branch[0].x) * tf,
+          y: branch[0].y + (branch[branch.length - 1].y - branch[0].y) * tf,
+        };
+        const tSide = hash01(k * 47 + s + 1) < 0.5 ? 1 : -1;
+        const tDev = ((22 + hash01(k * 47 + s + 2) * 20) * Math.PI) / 180;
+        const tc = Math.cos(tDev * tSide);
+        const ts = Math.sin(tDev * tSide);
+        const tbx = bx * tc - by * ts;
+        const tby = bx * ts + by * tc;
+        const tertiary = buildBranch(tStart, tbx, tby, length * 0.5, 2, k * 59 + s * 11 + 1);
+        cracks.push({ points: tertiary, generation: 3, intensity: intensityOf(tertiary) });
+      }
+    }
+  }
+
+  return { impact, shards, cracks };
 }
 
-/** Pure per-shard transform: same (progress, shard) -> same result. At
- * progress 0 and 1 shatterAmount is 0, so every field is the identity and the
- * fragments reassemble pixel-perfect. Displacement is along the shard's radial
- * vector from the impact; nearer-impact shards lead and travel farther. */
+/** Pure per-shard transform: same (progress, shard) -> same result. shatter is
+ * 0 at p = 0 (identity -> pixel-perfect reassembly) and a FULL, HELD 1 at
+ * p = 1 (lockup stays blown apart at the right extreme). Displacement is along
+ * the shard's radial vector from the impact; nearer-impact shards lead and
+ * travel farther. */
 export function shardTransform(progress: number, shard: Shard): ShardTransform {
   const amount = shatterAmount(progress);
 
@@ -268,8 +420,7 @@ export function shardTransform(progress: number, shard: Shard): ShardTransform {
   const reach = 1.0 - shard.distNorm * 0.5; // 1.0 (near) .. 0.5 (far).
 
   const spin = hash01(shard.seed * 3 + 1) * 2 - 1; // [-1, 1]
-  // Scale delta in [-0.08, +0.06] -> scale in [0.92, 1.06] at full shatter.
-  const scaleDelta = -0.08 + hash01(shard.seed * 3 + 2) * 0.14;
+  const scaleDelta = -0.08 + hash01(shard.seed * 3 + 2) * 0.14; // [-0.08, +0.06]
 
   const mag = MAX_TRANSLATE * reach * staggered;
   const tx = shard.dirX * mag;

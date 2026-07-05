@@ -5,6 +5,7 @@
 
 import { Link, useParams } from "react-router-dom";
 import { CONTENT } from "../../../content/mock";
+import { BackHomeLink } from "../../../components/BackHomeLink";
 import { usePageMeta } from "../../layout/PageMeta";
 import { buildCourseJsonLd } from "../../../lib/jsonld";
 
@@ -22,6 +23,7 @@ export function CourseDetail() {
   if (!course) {
     return (
       <main className="px-4 py-12">
+        <BackHomeLink className="mb-6" />
         <h1 className="font-display text-4xl font-extrabold italic uppercase text-mp-white">
           We could not find that class
         </h1>

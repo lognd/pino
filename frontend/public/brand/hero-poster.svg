@@ -17,10 +17,16 @@
       <stop offset="45%" stop-color="#E8112D" stop-opacity="0.08" />
       <stop offset="100%" stop-color="#E8112D" stop-opacity="0" />
     </linearGradient>
-    <!-- Hot core hugging the origin edge at barrel height (y ~ 52%). -->
-    <radialGradient id="poster-core" cx="0%" cy="52%" r="26%">
-      <stop offset="0%" stop-color="#F4F4F2" stop-opacity="0.55" />
-      <stop offset="40%" stop-color="#E8112D" stop-opacity="0.28" />
+    <!-- Hot core hugging the origin edge at barrel height (y ~ 52%): an
+         elongated (anamorphic, ~2.2x wider than tall) streak with an
+         inverse-square-ish falloff, plus a one-beat red rim just outside the
+         hot centre (Revision 3). -->
+    <radialGradient id="poster-core" cx="0%" cy="52%" r="30%"
+      gradientTransform="translate(0 0.364) scale(1 0.3)">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.85" />
+      <stop offset="12%" stop-color="#F8F6F0" stop-opacity="0.5" />
+      <stop offset="30%" stop-color="#E8112D" stop-opacity="0.3" />
+      <stop offset="60%" stop-color="#E8112D" stop-opacity="0.1" />
       <stop offset="100%" stop-color="#E8112D" stop-opacity="0" />
     </radialGradient>
     <radialGradient id="poster-vignette" cx="50%" cy="50%" r="72%">

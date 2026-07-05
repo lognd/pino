@@ -13,6 +13,7 @@ import { useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { CONTENT } from "../../../content/mock";
+import { BackHomeLink } from "../../../components/BackHomeLink";
 import { PhoneFallbackNote } from "../../../components/PhoneFallbackNote";
 import { BigButton } from "../../../components/BigButton";
 import { Field } from "../../../components/Field";
@@ -187,6 +188,7 @@ export function Book() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">
+      <BackHomeLink className="mb-6" />
       <h1 className="font-display text-4xl font-extrabold italic uppercase text-mp-white">
         {CONTENT.meta.book.title}
       </h1>

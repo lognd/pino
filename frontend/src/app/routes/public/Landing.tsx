@@ -45,71 +45,107 @@ export function Landing() {
         <Hero />
       </Suspense>
 
-      {/* Real, screen-reader/SEO-visible H1 -- independent of the hero's
-          decorative aria-hidden wordmark (doc 08's acceptance criteria). */}
-      <h1 className="font-display text-4xl font-extrabold italic uppercase text-mp-white px-4 pt-8">
-        {businessShortName}
-      </h1>
-      <p className="mt-4 max-w-[70ch] px-4 text-lg text-mp-white">{CONTENT.hero.headline}</p>
-      <p className="mt-2 max-w-[70ch] px-4 text-lg text-mp-white">{CONTENT.hero.subhead}</p>
-      <div className="px-4 pt-6">
-        <Link
-          to="/book"
-          className="inline-block min-h-[56px] w-full bg-mp-red px-6 py-4 text-xl font-bold uppercase text-mp-white hover:bg-mp-red-press sm:w-auto"
-        >
-          {CONTENT.hero.ctaLabel}
-        </Link>
-      </div>
+      {/* Intro block. Real, screen-reader/SEO-visible H1 -- independent of the
+          hero's decorative aria-hidden wordmark (doc 08's acceptance criteria).
+          Vertical rhythm uses one spacing scale (py-16 sm:py-20 per section,
+          space-y-6 within), not ad-hoc margins (doc 09 polish pass). */}
+      <section className="mx-auto max-w-6xl space-y-6 px-4 py-16 sm:py-20">
+        <h1 className="font-display text-4xl font-extrabold italic uppercase text-mp-white sm:text-5xl">
+          {businessShortName}
+        </h1>
+        <p className="max-w-[70ch] text-lg text-mp-white">{CONTENT.hero.headline}</p>
+        <p className="max-w-[70ch] text-lg text-mp-white">{CONTENT.hero.subhead}</p>
+        <div>
+          <Link
+            to="/book"
+            className="inline-block min-h-[56px] w-full bg-mp-red px-6 py-4 text-xl font-bold uppercase text-mp-white transition-colors hover:bg-mp-red-press sm:w-auto"
+          >
+            {CONTENT.hero.ctaLabel}
+          </Link>
+        </div>
+      </section>
 
-      <section aria-labelledby="courses-heading" className="mt-16 px-4">
-        <h2 id="courses-heading" className="font-display text-3xl font-extrabold italic uppercase text-mp-white">
-          Courses
-        </h2>
-        <ul className="mt-6 grid gap-6 sm:grid-cols-3">
-          {CONTENT.courses.map((course) => (
-            <li key={course.slug} className="border-2 border-mp-border bg-mp-surface p-6">
-              <h3 className="font-display text-2xl font-extrabold italic uppercase text-mp-white">
-                {course.name}
-              </h3>
-              <p className="mt-2 text-lg text-mp-white">{course.shortDescription}</p>
-              <p className="mt-2 text-lg font-semibold text-mp-white">{course.priceLabel}</p>
-              <Link
-                to={`/courses/${course.slug}`}
-                className="mt-4 inline-block text-lg font-semibold text-mp-red-text underline"
+      {/* Diagonal divider (doc 09's single --mp-skew angle) framing the course
+          band -- a deliberate hard-edged section break, not a soft gradient. */}
+      <section
+        aria-labelledby="courses-heading"
+        className="mp-diagonal-divider border-y-2 border-mp-border bg-mp-black-true py-16 sm:py-20"
+      >
+        <div className="mx-auto max-w-6xl px-4">
+          <h2
+            id="courses-heading"
+            className="font-display text-3xl font-extrabold italic uppercase text-mp-white sm:text-4xl"
+          >
+            Courses
+          </h2>
+          <ul className="mt-8 grid gap-6 sm:grid-cols-3">
+            {CONTENT.courses.map((course) => (
+              <li
+                key={course.slug}
+                className="flex flex-col border-2 border-mp-border bg-mp-surface p-6 transition-[border-color,box-shadow] hover:border-mp-red hover:shadow-[6px_6px_0_0_var(--mp-black-true)] focus-within:border-mp-red focus-within:shadow-[6px_6px_0_0_var(--mp-black-true)]"
               >
-                Learn more about {course.name}
-              </Link>
+                {/* Hierarchy: title / plain-words meta / price / one CTA. */}
+                <h3 className="font-display text-2xl font-extrabold italic uppercase text-mp-white">
+                  {course.name}
+                </h3>
+                <p className="mt-3 text-lg text-mp-white">{course.shortDescription}</p>
+                <p className="mt-4 font-display text-2xl font-extrabold italic text-mp-white">
+                  {course.priceLabel}
+                </p>
+                <Link
+                  to={`/courses/${course.slug}`}
+                  className="mt-6 inline-block text-lg font-semibold text-mp-red-text underline underline-offset-4"
+                >
+                  Learn more about {course.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* Credibility strip -- designed as a row of hard-edged stat blocks with
+          a red key-line, not a bare bulleted list (doc 09). */}
+      <section aria-labelledby="credibility-heading" className="mx-auto max-w-6xl px-4 py-16 sm:py-20">
+        <h2
+          id="credibility-heading"
+          className="font-display text-3xl font-extrabold italic uppercase text-mp-white sm:text-4xl"
+        >
+          {CONTENT.credibility.heading}
+        </h2>
+        <ul className="mt-8 grid gap-px border-2 border-mp-border bg-mp-border sm:grid-cols-2">
+          {CONTENT.credibility.items.map((item) => (
+            <li key={item} className="flex items-start gap-4 bg-mp-surface p-6">
+              <span aria-hidden="true" className="mt-1 h-6 w-1.5 shrink-0 bg-mp-red" />
+              <span className="text-lg text-mp-white">{item}</span>
             </li>
           ))}
         </ul>
       </section>
 
-      <section aria-labelledby="credibility-heading" className="mt-16 px-4">
-        <h2 id="credibility-heading" className="font-display text-3xl font-extrabold italic uppercase text-mp-white">
-          {CONTENT.credibility.heading}
-        </h2>
-        <ul className="mt-6 max-w-[70ch] list-disc space-y-2 pl-6 text-lg text-mp-white">
-          {CONTENT.credibility.items.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </section>
-
+      {/* Full-bleed red CTA band with the same diagonal cut. Secondary-styled
+          button (white outline on black) so this is not a second competing red
+          primary against the intro CTA. */}
       <section
         aria-labelledby="cta-band-heading"
-        className="mp-diagonal-divider mt-16 bg-mp-red px-4 py-16 text-center"
+        className="mp-diagonal-divider bg-mp-red py-16 text-center sm:py-20"
       >
-        <h2 id="cta-band-heading" className="font-display text-3xl font-extrabold italic uppercase text-mp-white">
-          {CONTENT.ctaBand.heading}
-        </h2>
-        <p className="mx-auto mt-4 max-w-[60ch] text-xl font-bold text-mp-white">{CONTENT.ctaBand.body}</p>
-        <div className="mt-6">
-          <Link
-            to="/book"
-            className="inline-block min-h-[56px] w-full border-2 border-mp-white bg-mp-black-true px-6 py-4 text-xl font-bold uppercase text-mp-white sm:w-auto"
+        <div className="mx-auto max-w-6xl space-y-6 px-4">
+          <h2
+            id="cta-band-heading"
+            className="font-display text-3xl font-extrabold italic uppercase text-mp-white sm:text-4xl"
           >
-            {CONTENT.ctaBand.ctaLabel}
-          </Link>
+            {CONTENT.ctaBand.heading}
+          </h2>
+          <p className="mx-auto max-w-[60ch] text-xl font-bold text-mp-white">{CONTENT.ctaBand.body}</p>
+          <div>
+            <Link
+              to="/book"
+              className="inline-block min-h-[56px] w-full border-2 border-mp-white bg-mp-black-true px-6 py-4 text-xl font-bold uppercase text-mp-white transition-colors hover:bg-mp-surface sm:w-auto"
+            >
+              {CONTENT.ctaBand.ctaLabel}
+            </Link>
+          </div>
         </div>
       </section>
     </main>

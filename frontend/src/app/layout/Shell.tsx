@@ -32,6 +32,14 @@ export function Shell({ children }: { children: ReactNode }) {
           </Link>
           <ul className="flex flex-wrap items-center gap-6">
             <li>
+              {/* Explicit plain-text Home backlink -- first nav item, doc 09's
+                  binding backlink-home rule (the wordmark logo alone is not
+                  enough for this audience). */}
+              <Link to={CONTENT.nav.home.path} className={NAV_LINK} {...bulletProps}>
+                {CONTENT.nav.home.label}
+              </Link>
+            </li>
+            <li>
               <Link
                 to={CONTENT.nav.courses.path}
                 className={NAV_LINK}

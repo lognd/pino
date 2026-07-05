@@ -5,8 +5,9 @@
 // /legal/disclaimers) all render through this one template so the legal
 // surface has a single home to update.
 
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { CONTENT } from "../../../content/mock";
+import { BackHomeLink } from "../../../components/BackHomeLink";
 import { usePageMeta } from "../../layout/PageMeta";
 
 export function LegalPage() {
@@ -23,18 +24,17 @@ export function LegalPage() {
   if (!entry) {
     return (
       <main className="px-4 py-12">
+        <BackHomeLink className="mb-6" />
         <h1 className="font-display text-4xl font-extrabold italic uppercase text-mp-white">
           We could not find that page
         </h1>
-        <Link to="/" className="mt-6 inline-block text-lg font-semibold text-mp-red-text underline">
-          Go back home
-        </Link>
       </main>
     );
   }
 
   return (
     <main className="px-4 py-12">
+      <BackHomeLink className="mb-6" />
       <h1 className="font-display text-4xl font-extrabold italic uppercase text-mp-white">
         {entry.title}
       </h1>

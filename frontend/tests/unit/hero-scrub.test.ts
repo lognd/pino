@@ -90,7 +90,7 @@ describe("hero/scrubMachine.ts step", () => {
     expect(Math.abs(s.progress - parked)).toBeLessThan(0.01);
   });
 
-  it("settles HOME to 0 when idle below SHOT_MOMENT", () => {
+  it("settles HOME to 0 when idle below SHOT_MOMENT (reassembles)", () => {
     // pointerX 0.35 with default inset 0.2 -> progress ~0.25 (< SHOT_MOMENT).
     let s = run(initialScrubState(), 900, 0.35);
     expect(s.progress).toBeLessThan(SHOT_MOMENT);
@@ -101,30 +101,31 @@ describe("hero/scrubMachine.ts step", () => {
     expect(s.progress).toBeLessThan(0.02);
   });
 
-  it("settles HOME to 1 when idle above SHOT_MOMENT", () => {
+  it("settles HOME to 0 even when idle above SHOT_MOMENT (Revision 3: always reassembles)", () => {
     // pointerX 0.6 with default inset 0.2 -> progress ~0.67 (> SHOT_MOMENT).
+    // The right extreme is the held-shattered state, so home is still 0.
     let s = run(initialScrubState(), 900, 0.6);
     expect(s.progress).toBeGreaterThan(SHOT_MOMENT);
     s = run(s, IDLE_THRESHOLD_MS + 100, null);
     expect(s.mode).toBe("settle");
-    expect(s.settleTo).toBe(1);
+    expect(s.settleTo).toBe(0);
     s = run(s, DEFAULT_SETTLE_MS + 600, null);
-    expect(s.progress).toBeGreaterThan(0.98);
+    expect(s.progress).toBeLessThan(0.02);
   });
 
-  it("settles home immediately when the pointer leaves the hero", () => {
+  it("settles home (to 0) immediately when the pointer leaves the hero", () => {
     let s = run(initialScrubState(), 900, 0.6); // parked above SHOT
     s = step(s, { pointerX: null, dtMs: FRAME, pointerLeft: true });
     expect(s.mode).toBe("settle");
-    expect(s.settleTo).toBe(1);
+    expect(s.settleTo).toBe(0);
   });
 
-  it("does NOT ping-pong: once home it rests at the extreme", () => {
-    let s = run(initialScrubState(), 900, 0.6); // above SHOT -> settles to 1
+  it("does NOT ping-pong: once reassembled it rests at 0", () => {
+    let s = run(initialScrubState(), 900, 0.6); // above SHOT -> settles to 0
     s = run(s, IDLE_THRESHOLD_MS + DEFAULT_SETTLE_MS + 2000, null);
-    // Long after arriving it stays put at 1 (no reversal, no drift back down).
+    // Long after arriving it stays put at 0 (no reversal, no drift back up).
     expect(s.mode).toBe("settle");
-    expect(s.progress).toBeGreaterThan(0.98);
+    expect(s.progress).toBeLessThan(0.02);
     const later = run(s, 3000, null);
     expect(Math.abs(later.progress - s.progress)).toBeLessThan(1e-3);
   });
@@ -142,16 +143,20 @@ describe("hero/scrubMachine.ts step", () => {
     expect(done.progress).toBeGreaterThan(0.95);
   });
 
-  it("touch one-shot: plays a single slow 0 -> 1 settle-through, ignoring the pointer", () => {
+  it("touch one-shot: plays 0 -> 1 then settles back to 0, ignoring the pointer", () => {
     let s = initialScrubState({ touch: true });
     expect(s.mode).toBe("touch");
     // Even with the pointer pinned left, touch mode ignores it and climbs.
     const mid = run(s, TOUCH_INTRO_MS / 2, 0);
     expect(mid.progress).toBeGreaterThan(0.2);
     expect(mid.progress).toBeLessThan(0.95);
-    s = run(mid, TOUCH_INTRO_MS, 0);
+    // Near the end of the intro it has reached full shatter.
+    const peak = run(mid, TOUCH_INTRO_MS / 2, 0);
+    expect(peak.progress).toBeGreaterThan(0.9);
+    // Then (Revision 3) it reassembles all the way back to 0.
+    s = run(peak, DEFAULT_SETTLE_MS + 800, 0);
     expect(s.mode).toBe("touch");
-    expect(s.progress).toBeGreaterThan(0.98); // rests whole at 1
+    expect(s.progress).toBeLessThan(0.03);
   });
 
   it("trips the low-power guard after two consecutive sub-30fps seconds", () => {

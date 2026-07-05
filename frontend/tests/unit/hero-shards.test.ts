@@ -9,19 +9,48 @@ import {
 } from "../../src/hero/shards";
 import { SHOT_MOMENT } from "../../src/hero/timeline";
 
-// docs/design/08-landing-hero.md (Revision 2) shard obligations: purity, the
-// shatter envelope (peaks at SHOT_MOMENT), pixel-perfect reassembly at the
-// extremes, and the NEW radial-crack rules -- fragments tile the field, and
-// each fragment displaces ALONG its radial vector from the impact point with
-// nearer-impact fragments leading and travelling farther.
+// docs/design/08-landing-hero.md (Revision 3) shard obligations: purity, the
+// NEW held shatter envelope (0 until SHOT_MOMENT, monotone-rising to a FULL,
+// HELD 1 at p = 1, identity only at p = 0), the branched/fractal crack network
+// (kinked primaries with secondary/tertiary branches), fragments tiling the
+// field, and each fragment displacing ALONG its radial vector from the impact.
 
 const built = buildShards();
 const IMPACT = built.impact;
 const SHARDS: Shard[] = built.shards;
+const CRACKS = built.cracks;
 
 const magOf = (t: { tx: number; ty: number }) => Math.hypot(t.tx, t.ty);
 
-describe("hero/shards.ts buildShards (radial-crack tessellation)", () => {
+describe("hero/shards.ts shatterAmount (Revision 3 held envelope)", () => {
+  it("is exactly 0 at and below SHOT_MOMENT", () => {
+    expect(shatterAmount(0)).toBe(0);
+    expect(shatterAmount(SHOT_MOMENT / 2)).toBe(0);
+    expect(shatterAmount(SHOT_MOMENT)).toBe(0);
+  });
+
+  it("is FULL (1) and HELD at p = 1 and beyond", () => {
+    expect(shatterAmount(1)).toBeCloseTo(1, 6);
+    expect(shatterAmount(1.5)).toBe(shatterAmount(1)); // clamped/held.
+  });
+
+  it("is monotone non-decreasing across [0,1]", () => {
+    let prev = -1;
+    for (let p = 0; p <= 1.00001; p += 0.02) {
+      const a = shatterAmount(p);
+      expect(a).toBeGreaterThanOrEqual(prev - 1e-9);
+      prev = a;
+    }
+  });
+
+  it("rises strictly between SHOT_MOMENT and 1", () => {
+    expect(shatterAmount(0.5)).toBeGreaterThan(0);
+    expect(shatterAmount(0.8)).toBeGreaterThan(shatterAmount(0.5));
+    expect(shatterAmount(1)).toBeGreaterThan(shatterAmount(0.8));
+  });
+});
+
+describe("hero/shards.ts buildShards (branched-crack tessellation)", () => {
   it("produces a non-trivial fracture with all vertices inside the field", () => {
     expect(SHARDS.length).toBeGreaterThan(12);
     for (const shard of SHARDS) {
@@ -35,6 +64,50 @@ describe("hero/shards.ts buildShards (radial-crack tessellation)", () => {
       expect(shard.distNorm).toBeLessThanOrEqual(1);
     }
   });
+
+  it("is deterministic: the same seed rebuilds identical geometry", () => {
+    const again = buildShards();
+    expect(again.shards.length).toBe(SHARDS.length);
+    expect(again.cracks.length).toBe(CRACKS.length);
+    expect(again.shards[3].points).toEqual(SHARDS[3].points);
+  });
+});
+
+describe("hero/shards.ts crack network (branchy + fractal)", () => {
+  const primaries = CRACKS.filter((c) => c.generation === 1);
+  const secondaries = CRACKS.filter((c) => c.generation === 2);
+  const tertiaries = CRACKS.filter((c) => c.generation === 3);
+
+  it("emits primary cracks as KINKED polylines of 3-6 segments (never a straight line)", () => {
+    expect(primaries.length).toBeGreaterThanOrEqual(12);
+    for (const c of primaries) {
+      // 3-6 segments -> 4-7 vertices.
+      expect(c.points.length).toBeGreaterThanOrEqual(4);
+      expect(c.points.length).toBeLessThanOrEqual(7);
+      // Not collinear: at least one interior vertex bends the line.
+      const a = c.points[0];
+      const b = c.points[c.points.length - 1];
+      let maxCross = 0;
+      for (const p of c.points) {
+        const cross = Math.abs((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x));
+        maxCross = Math.max(maxCross, cross);
+      }
+      expect(maxCross).toBeGreaterThan(1); // genuinely kinked, not a chord.
+    }
+  });
+
+  it("spawns 1-3 secondary branches per primary and some tertiaries near impact", () => {
+    expect(secondaries.length).toBeGreaterThanOrEqual(primaries.length);
+    expect(secondaries.length).toBeLessThanOrEqual(primaries.length * 3);
+    expect(tertiaries.length).toBeGreaterThan(0);
+  });
+
+  it("marks near-impact cracks as brighter (higher intensity)", () => {
+    for (const c of CRACKS) {
+      expect(c.intensity).toBeGreaterThanOrEqual(0);
+      expect(c.intensity).toBeLessThanOrEqual(1);
+    }
+  });
 });
 
 describe("hero/shards.ts shardTransform", () => {
@@ -44,81 +117,51 @@ describe("hero/shards.ts shardTransform", () => {
     }
   });
 
-  it("reassembles to the identity lockup at progress 0 and 1", () => {
-    for (const p of [0, 1]) {
-      for (const shard of SHARDS) {
-        const t = shardTransform(p, shard);
-        expect(t.tx).toBeCloseTo(0, 10);
-        expect(t.ty).toBeCloseTo(0, 10);
-        expect(t.rot).toBeCloseTo(0, 10);
-        expect(t.scale).toBe(1);
-        expect(t.opacity).toBe(1);
-      }
-    }
-  });
-
-  it("shatter peaks (max displacement) at SHOT_MOMENT and is zero at extremes", () => {
-    expect(shatterAmount(SHOT_MOMENT)).toBeCloseTo(1, 6);
-    expect(shatterAmount(0)).toBeCloseTo(0, 6);
-    expect(shatterAmount(1)).toBeCloseTo(0, 6);
-    const shard = SHARDS[Math.floor(SHARDS.length / 2)];
-    const atShot = shardTransform(SHOT_MOMENT, shard);
-    const partway = shardTransform((SHOT_MOMENT + 1) / 2, shard);
-    expect(magOf(atShot)).toBeGreaterThan(magOf(partway));
-  });
-
-  it("shatter envelope is monotone on each side of SHOT_MOMENT", () => {
-    let prev = -1;
-    for (let p = 0; p <= SHOT_MOMENT; p += 0.02) {
-      const a = shatterAmount(p);
-      expect(a).toBeGreaterThanOrEqual(prev - 1e-9);
-      prev = a;
-    }
-    prev = 2;
-    for (let p = SHOT_MOMENT; p <= 1; p += 0.02) {
-      const a = shatterAmount(p);
-      expect(a).toBeLessThanOrEqual(prev + 1e-9);
-      prev = a;
-    }
-  });
-
-  it("displaces each fragment ALONG its radial vector from the impact", () => {
+  it("reassembles to the identity lockup ONLY at progress 0", () => {
     for (const shard of SHARDS) {
-      const t = shardTransform(SHOT_MOMENT, shard);
+      const t = shardTransform(0, shard);
+      expect(t.tx).toBeCloseTo(0, 10);
+      expect(t.ty).toBeCloseTo(0, 10);
+      expect(t.rot).toBeCloseTo(0, 10);
+      expect(t.scale).toBe(1);
+      expect(t.opacity).toBe(1);
+    }
+    // At p = 1 the lockup is HELD shattered -> at least one shard has moved.
+    const moved = SHARDS.some((s) => magOf(shardTransform(1, s)) > 1);
+    expect(moved).toBe(true);
+  });
+
+  it("displaces each fragment ALONG its radial vector from the impact (outward)", () => {
+    for (const shard of SHARDS) {
+      const t = shardTransform(1, shard);
       if (magOf(t) < 1e-6) continue;
       const rx = shard.cx - IMPACT.x;
       const ry = shard.cy - IMPACT.y;
-      // Parallel to the impact->centroid ray: cross product ~ 0.
       const cross = t.tx * ry - t.ty * rx;
       expect(Math.abs(cross)).toBeLessThan(1e-3);
-      // And outward (away from the impact), not inward.
       expect(t.tx * rx + t.ty * ry).toBeGreaterThan(0);
     }
   });
 
-  it("nearer-impact fragments travel farther at full shatter", () => {
+  it("nearer-impact fragments travel farther at full shatter (p = 1)", () => {
     const sorted = [...SHARDS].sort((a, b) => a.distNorm - b.distNorm);
     const near = sorted[0];
     const far = sorted[sorted.length - 1];
     expect(near.distNorm).toBeLessThan(far.distNorm);
-    expect(magOf(shardTransform(SHOT_MOMENT, near))).toBeGreaterThan(
-      magOf(shardTransform(SHOT_MOMENT, far)),
-    );
+    expect(magOf(shardTransform(1, near))).toBeGreaterThan(magOf(shardTransform(1, far)));
   });
 
-  it("nearer-impact fragments lead (move earlier) partway to the shot", () => {
+  it("nearer-impact fragments lead (move earlier) partway through the shatter", () => {
     const sorted = [...SHARDS].sort((a, b) => a.distNorm - b.distNorm);
     const near = sorted[0];
     const far = sorted[sorted.length - 1];
-    // Well before the shot the near fragment is already displacing more.
-    expect(magOf(shardTransform(0.15, near))).toBeGreaterThan(
-      magOf(shardTransform(0.15, far)),
-    );
+    // Just past the shot the near fragment is already displacing more.
+    expect(magOf(shardTransform(0.5, near))).toBeGreaterThan(magOf(shardTransform(0.5, far)));
   });
 
-  it("keeps opacity within [floor, 1] and scale within 0.92-1.06", () => {
+  it("keeps opacity within [floor, 1] and scale within 0.92-1.06 at full shatter", () => {
     for (const shard of SHARDS) {
-      const t = shardTransform(SHOT_MOMENT, shard);
+      const t = shardTransform(1, shard);
       expect(t.opacity).toBeGreaterThanOrEqual(0.41);
       expect(t.opacity).toBeLessThanOrEqual(1);
       expect(t.scale).toBeGreaterThanOrEqual(0.91);

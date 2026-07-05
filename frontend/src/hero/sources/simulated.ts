@@ -29,7 +29,11 @@ import { SHOT_MOMENT, ORIGIN_FX, ORIGIN_FY } from "../timeline";
 
 const BLACK = "#000000";
 const WHITE = "#F4F4F2";
-const RED = "#E8112D";
+// Sanctioned palette exception (doc 08 Revision 3): a single desaturated brass
+// tone, permitted for the casing ONLY. Kept muted so the frame still reads
+// black/white/red at a glance.
+const BRASS = "#B08842";
+const BRASS_DARK = "#7A5E2C";
 
 const SMOKE_COUNT = 6;
 /** Grain tile size in device px (blitted, scaled, tiled -- allocated once). */
@@ -61,6 +65,7 @@ export class SimulatedSource implements ScrubSource {
   // Pre-created gradients (unit-space radials + a canvas-space spill/vignette).
   private bloomGrad: CanvasGradient | null = null;
   private coreGrad: CanvasGradient | null = null;
+  private rimGrad: CanvasGradient | null = null;
   private smokeGrad: CanvasGradient | null = null;
   private spillGrad: CanvasGradient | null = null;
   private vignetteGrad: CanvasGradient | null = null;
@@ -91,12 +96,23 @@ export class SimulatedSource implements ScrubSource {
       bloom.addColorStop(0.4, "rgba(232,17,45,0.4)");
       bloom.addColorStop(1, "rgba(232,17,45,0)");
       this.bloomGrad = bloom;
-      // White-hot core, unit radius.
+      // White-hot core, unit radius, with an INVERSE-SQUARE-ish falloff (stops
+      // roughly following 1/(1+kr^2)) so brightness collapses fast off-centre
+      // instead of the soft linear ramp that read as a cartoon starburst.
       const core = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-      core.addColorStop(0, "rgba(244,244,242,1)");
-      core.addColorStop(0.5, "rgba(244,244,242,0.6)");
+      core.addColorStop(0, "rgba(255,255,255,1)");
+      core.addColorStop(0.12, "rgba(248,246,240,0.82)");
+      core.addColorStop(0.28, "rgba(244,244,242,0.42)");
+      core.addColorStop(0.55, "rgba(244,244,242,0.12)");
       core.addColorStop(1, "rgba(244,244,242,0)");
       this.coreGrad = core;
+      // One-beat red rim: a thin bright shell just outside the hot core.
+      const rim = ctx.createRadialGradient(0, 0, 0.6, 0, 0, 1);
+      rim.addColorStop(0, "rgba(232,17,45,0)");
+      rim.addColorStop(0.72, "rgba(232,17,45,0.55)");
+      rim.addColorStop(0.86, "rgba(255,120,140,0.5)");
+      rim.addColorStop(1, "rgba(232,17,45,0)");
+      this.rimGrad = rim;
       // Soft smoke puff, unit radius (near-white, low alpha).
       const smoke = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
       smoke.addColorStop(0, "rgba(244,244,242,0.2)");
@@ -147,10 +163,26 @@ export class SimulatedSource implements ScrubSource {
     ctx.fillStyle = BLACK;
     ctx.fillRect(0, 0, w, h);
 
-    // Bloom intensity: a bump peaking at SHOT_MOMENT, decaying either side.
-    const bloom = Math.exp(-Math.pow((p - SHOT_MOMENT) / 0.11, 2));
+    // Flash timeline (Revision 3): a short sliver of the timeline around
+    // SHOT_MOMENT where exposure blows out, with a hot anamorphic core, a
+    // one-beat red rim just after the peak, then instant decay into smoke +
+    // lingering rim light. Three nested bumps of different widths.
+    const bloom = Math.exp(-Math.pow((p - SHOT_MOMENT) / 0.10, 2)); // envelope
+    const blowout = Math.exp(-Math.pow((p - SHOT_MOMENT) / 0.028, 2)); // sliver
+    // Red rim beats ONE frame after the core peak (asymmetric, delayed).
+    const rimBeat = Math.exp(-Math.pow((p - (SHOT_MOMENT + 0.045)) / 0.05, 2));
     // How far past the shot we are, in [0,1] (drives casing + smoke travel).
     const after = clamp01((p - SHOT_MOMENT) / (1 - SHOT_MOMENT));
+
+    // Exposure blowout: the whole field lifts for a couple of frame-equivalents
+    // (a bright wash), sold as over-exposure rather than a discrete fireball.
+    if (blowout > 0.02) {
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = clamp01(blowout * 0.16);
+      ctx.fillStyle = WHITE;
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalAlpha = 1;
+    }
 
     ctx.globalCompositeOperation = "lighter";
 
@@ -162,13 +194,19 @@ export class SimulatedSource implements ScrubSource {
       ctx.globalAlpha = 1;
     }
 
-    // Layered bloom anchored at the off-frame origin: red rim then hot white
-    // core, so the brightness reads as spilling in from the left edge.
+    // Layered bloom anchored at the off-frame origin: red halo, an elongated
+    // (anamorphic) hot core with inverse-square falloff, and a one-beat red rim
+    // -- so the brightness reads as light spilling in from the left edge.
     if (bloom > 0.01 && this.bloomGrad && this.coreGrad) {
       const haloR = h * (0.4 + 0.9 * bloom);
-      this.drawUnitGradient(ctx, this.bloomGrad, originX, originY, haloR, bloom);
-      const coreR = h * (0.12 + 0.4 * bloom);
-      this.drawUnitGradient(ctx, this.coreGrad, originX, originY, coreR, bloom);
+      this.drawUnitGradient(ctx, this.bloomGrad, originX, originY, haloR, bloom * 0.85);
+      // Anamorphic core: ~2.2x wider than tall (horizontal streak).
+      const coreRy = h * (0.10 + 0.30 * blowout + 0.06 * bloom);
+      this.drawAnamorphic(ctx, this.coreGrad, originX, originY, coreRy * 2.2, coreRy, blowout * 0.95 + bloom * 0.25);
+      if (this.rimGrad && rimBeat > 0.02) {
+        const rimR = h * (0.22 + 0.5 * bloom);
+        this.drawAnamorphic(ctx, this.rimGrad, originX, originY, rimR * 1.8, rimR, rimBeat * 0.7);
+      }
     }
 
     // Smoke: soft puffs whose positions are FUNCTIONS of progress, drifting in
@@ -187,26 +225,47 @@ export class SimulatedSource implements ScrubSource {
       }
     }
 
-    // Casing: enters FROM the origin on a ballistic arc, tumbling, then falls.
+    // Casing (Revision 3): TINY, fast, and specular. A 9mm case is minuscule
+    // against a viewport wordmark, so it errs small. It enters hot from the
+    // origin, decelerates believably (position eases out -> fast start, gentle
+    // settle), tumbles (foreshortened ellipse silhouette), carries a bright
+    // specular glint line, and motion-stretches along its velocity when fast.
     if (after > 0) {
+      // Ease-out travel: quick off the mark, decelerating -- a real ejection.
       const s = after;
-      // Travels rightward into the frame; arcs up then settles under gravity.
-      const cx = originX + w * 0.42 * s;
-      const cy = originY - h * 0.22 * Math.sin(Math.PI * s) + h * 0.12 * s * s;
-      const spin = s * Math.PI * 6; // tumble.
-      // Fades in as it clears the edge, fades slightly as it tumbles away.
-      const enter = clamp01(s / 0.12);
+      const decel = 1 - (1 - s) * (1 - s); // ease-out quad.
+      const cx = originX + w * 0.34 * decel;
+      const cy = originY - h * 0.16 * Math.sin(Math.PI * s) + h * 0.14 * s * s;
+      const spin = s * Math.PI * 7; // tumble.
+      // Instantaneous speed (derivative-ish) drives the motion-stretch.
+      const speed = clamp01((1 - s) * 1.4);
+      const enter = clamp01(s / 0.08);
       ctx.globalCompositeOperation = "source-over";
-      ctx.globalAlpha = enter * clamp01(1 - s * 0.25);
+      ctx.globalAlpha = enter * clamp01(1 - s * 0.2);
       ctx.save();
       ctx.translate(cx, cy);
+      // Orient stretch along velocity (roughly horizontal entry), then tumble.
+      const stretch = 1 + speed * 1.6;
       ctx.rotate(spin);
-      const cw = w * 0.012;
-      const ch = h * 0.045;
-      ctx.fillStyle = WHITE;
-      ctx.fillRect(-cw / 2, -ch / 2, cw, ch);
-      ctx.fillStyle = RED;
-      ctx.fillRect(-cw / 2, ch / 2 - ch * 0.22, cw, ch * 0.22);
+      // Small brass capsule; height foreshortens with the tumble (ellipse
+      // silhouette), width motion-stretches when moving fast.
+      const cw = w * 0.009 * stretch;
+      const ch = h * 0.03 * (0.35 + 0.65 * Math.abs(Math.cos(spin)));
+      ctx.fillStyle = BRASS;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, cw / 2, ch / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Darker base band (the case head) for a little form.
+      ctx.fillStyle = BRASS_DARK;
+      ctx.fillRect(-cw / 2, ch / 2 - ch * 0.28, cw, ch * 0.28);
+      // Specular glint: a bright hairline down the lit side.
+      ctx.strokeStyle = WHITE;
+      ctx.lineWidth = Math.max(0.6, cw * 0.12);
+      ctx.globalAlpha *= 0.9;
+      ctx.beginPath();
+      ctx.moveTo(-cw * 0.18, -ch * 0.4);
+      ctx.lineTo(-cw * 0.18, ch * 0.3);
+      ctx.stroke();
       ctx.restore();
       ctx.globalAlpha = 1;
     }
@@ -251,6 +310,25 @@ export class SimulatedSource implements ScrubSource {
     ctx.globalAlpha = 1;
   }
 
+  /** Draw a unit-space radial gradient with independent x/y radii -- an
+   * anamorphic (horizontally stretched) hot core, per Revision 3. */
+  private drawAnamorphic(
+    ctx: CanvasRenderingContext2D,
+    grad: CanvasGradient,
+    x: number,
+    y: number,
+    rx: number,
+    ry: number,
+    alpha: number,
+  ): void {
+    ctx.globalAlpha = clamp01(alpha);
+    ctx.setTransform(rx, 0, 0, ry, x, y);
+    ctx.fillStyle = grad;
+    ctx.fillRect(-1, -1, 2, 2);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+  }
+
   /** Build a seeded monochrome noise tile once and return a repeat pattern.
    * Returns null if offscreen canvas / pattern creation is unavailable. */
   private buildGrain(ctx: CanvasRenderingContext2D): CanvasPattern | null {
@@ -284,6 +362,7 @@ export class SimulatedSource implements ScrubSource {
     this.ctx = null;
     this.bloomGrad = null;
     this.coreGrad = null;
+    this.rimGrad = null;
     this.smokeGrad = null;
     this.spillGrad = null;
     this.vignetteGrad = null;

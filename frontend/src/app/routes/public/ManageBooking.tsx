@@ -13,6 +13,7 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CONTENT } from "../../../content/mock";
+import { BackHomeLink } from "../../../components/BackHomeLink";
 import { PhoneFallbackNote } from "../../../components/PhoneFallbackNote";
 import { BigButton } from "../../../components/BigButton";
 import { StatusBadge, type Status } from "../../../components/StatusBadge";
@@ -86,6 +87,7 @@ export function ManageBooking() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12">
+      <BackHomeLink className="mb-6" />
       <h1 className="font-display text-4xl font-extrabold italic uppercase text-mp-white">{T.heading}</h1>
 
       {!token && (

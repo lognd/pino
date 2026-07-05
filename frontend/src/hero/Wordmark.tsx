@@ -18,6 +18,7 @@ import { useMemo } from "react";
 import {
   buildShards,
   shardTransform,
+  shatterAmount,
   VIEW_W,
   VIEW_H,
   DEFAULT_IMPACT_FX,
@@ -76,10 +77,15 @@ export function Wordmark({
   className,
 }: WordmarkProps) {
   // Rebuild the fracture only when the impact point changes (default: once).
-  const { shards } = useMemo(
+  const { shards, cracks } = useMemo(
     () => buildShards({ impactFx, impactFy }),
     [impactFx, impactFy],
   );
+
+  // Crack hairlines trace the branched network as separation grows: invisible
+  // at rest (shatter 0 -> clean lockup), fading in with the shatter envelope,
+  // brighter near the impact (Revision 3 "RENDER THE CRACKS").
+  const shatter = shatterAmount(progress);
 
   return (
     <svg
@@ -111,6 +117,26 @@ export function Wordmark({
           </g>
         );
       })}
+      {/* Branched crack hairlines, drawn over the (separating) shards. Hidden
+          at rest; fade in with the shatter envelope, brighter near the impact
+          and on the primaries. */}
+      {shatter > 0.001 && (
+        <g fill="none" stroke={WHITE} strokeLinecap="round" strokeLinejoin="round">
+          {cracks.map((crack, i) => {
+            const alpha = shatter * (0.12 + crack.intensity * 0.55);
+            const width =
+              crack.generation === 1 ? 1.6 : crack.generation === 2 ? 1.0 : 0.6;
+            return (
+              <polyline
+                key={i}
+                points={crack.points.map((p) => `${p.x},${p.y}`).join(" ")}
+                strokeWidth={width}
+                opacity={Math.min(1, alpha)}
+              />
+            );
+          })}
+        </g>
+      )}
     </svg>
   );
 }

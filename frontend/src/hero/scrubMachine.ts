@@ -18,13 +18,13 @@
 //     (fraction per side, >= 0.15) is carried on the state so /hero-lab can
 //     tune it; `bandProgress` clamps outside the band to 0/1.
 //   - The idle behaviour is SETTLE-HOME, not ping-pong: after 3s idle or a
-//     pointer-leave the sequence eases (ease-out, ~5s) to the nearest
-//     assembled extreme (0 if progress < SHOT_MOMENT else 1) and RESTS whole.
-//     Ambient life at rest comes from the source's grain/smoke, not progress.
-//   - Touch devices get ONE slow settle-through on load (0 -> 1 over ~8s),
-//     then rest -- pointer input is ignored entirely in that mode.
-
-import { SHOT_MOMENT } from "./timeline";
+//     pointer-leave the sequence eases (ease-out, ~5s) home. Revision 3: home
+//     is ALWAYS 0 (not "nearest extreme"): the right extreme is the held-
+//     shattered state, so settling right would freeze the logo broken. On
+//     inaction MEL PINO always drifts back together. Ambient life at rest comes
+//     from the source's grain/smoke, not progress.
+//   - Touch devices get ONE slow pass on load (0 -> 1 over ~8s), then the same
+//     settle back to 0 -- pointer input is ignored entirely in that mode.
 
 /** Exponential-smoothing time constant for the eased chase (ms). progress
  * reaches ~94% of a step in ~2.8*TAU; with TAU=90ms that is ~250ms, the
@@ -73,7 +73,7 @@ export interface ScrubMachineState {
   settleMs: number;
   /** progress captured when settle-home started (ease-out origin). */
   settleFrom: number;
-  /** The assembled extreme settle-home eases toward (0 or 1). */
+  /** Where settle-home eases toward. Revision 3: always 0 (reassembled). */
   settleTo: number;
   /** ms elapsed inside the touch one-shot intro (mode === "touch"). */
   touchMs: number;
@@ -169,12 +169,13 @@ export function initialScrubState(
   };
 }
 
-/** Begin easing home toward the nearest assembled extreme (Revision 2). */
+/** Begin easing home. Revision 3: home is ALWAYS 0, so the lockup reassembles
+ * on every inaction (the right extreme is the held-shattered state). */
 function enterSettle(next: ScrubMachineState, fromProgress: number): void {
   next.mode = "settle";
   next.settleMs = 0;
   next.settleFrom = fromProgress;
-  next.settleTo = fromProgress < SHOT_MOMENT ? 0 : 1;
+  next.settleTo = 0;
 }
 
 /** Advance the machine one tick. Pure: same (state, input) -> same state. */
@@ -194,10 +195,17 @@ export function step(state: ScrubMachineState, input: ScrubInput): ScrubMachineS
     next.fpsWindowFrames = 0;
   }
 
-  // --- touch one-shot intro: ignore the pointer, ramp 0 -> 1 once, rest ---
+  // --- touch one-shot: ignore the pointer, ramp 0 -> 1 once, then settle back
+  // to 0 (Revision 3: MEL PINO reassembles after the intro pass) ---
   if (state.mode === "touch") {
     next.touchMs = state.touchMs + dt;
-    next.target = smoothstep(clamp01(next.touchMs / TOUCH_INTRO_MS));
+    if (next.touchMs <= TOUCH_INTRO_MS) {
+      next.target = smoothstep(clamp01(next.touchMs / TOUCH_INTRO_MS)); // 0 -> 1
+    } else {
+      // Ease-out from the shattered peak (1) back home to 0.
+      const k = easeOutCubic((next.touchMs - TOUCH_INTRO_MS) / state.settleDurationMs);
+      next.target = 1 - k;
+    }
     const alpha = 1 - Math.exp(-dt / CHASE_TAU_MS);
     next.progress = clamp01(state.progress + (next.target - state.progress) * alpha);
     return next;

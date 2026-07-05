@@ -69,6 +69,9 @@ export interface Content {
     contact: NavEntry;
     book: NavEntry;
   };
+  /** Plain-text "Back to home" backlink label -- doc 09's binding
+   * backlink-home rule for tokenized/dead-end pages. */
+  backToHomeLabel: string;
   hero: {
     headline: string;
     subhead: string;
@@ -263,6 +266,7 @@ export const CONTENT: Content = {
     contact: { label: "Contact", path: "/contact" },
     book: { label: "Book a class", path: "/book" },
   },
+  backToHomeLabel: "Back to home",
   hero: {
     headline: "SAMPLE -- Train With Confidence",
     subhead:

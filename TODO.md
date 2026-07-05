@@ -162,6 +162,27 @@ implementing; docs win over guesses.
 - [ ] HUMAN INPUT: demo to Mel; record per-screen answers in 14;
       then re-scope P7+ admin build accordingly
 
+## User-feedback rounds (docs/design/08 Revisions 2-4, doc 15)
+
+- [x] Hero R2: off-frame origin, inset band, settle-home, radial
+      shatter, bullethole component + Shell/BigButton wiring
+- [x] Hero R3: held right-extreme shatter, branched tessellation,
+      landing polish pass, Back-to-home links
+- [x] Hero R4: activity-driven playback (no position scrub),
+      break-on-reach, film-grade flash w/ photosensitivity clamp +
+      3 selectable variants in /hero-lab, casing + crack overlay
+      removed, seam + mid-sequence-discontinuity regressions fixed,
+      bullethole glass-damage rework on shared branching math
+- [x] Media system (doc 15): manifest, Carousel x3 variants +
+      /carousel-lab, /gallery (prerendered, lightbox, axe-clean),
+      LazyMedia + ClickToPlayVideo (no bytes pre-click, asserted),
+      landing strip, gallery/ R2 namespace, sync script (run at P7)
+- [x] Nav: wordmark logo far-left home link on non-landing pages;
+      "Home" text item removed
+- [ ] HUMAN INPUT: pick flash variant in /hero-lab and carousel
+      variant in /carousel-lab; confirm hero feel (energy rate, idle
+      timer) on a real device
+
 ## P7 -- Deploy (docs/design/11)
 
 - [ ] Dockerfile + compose prod stack boots locally end-to-end

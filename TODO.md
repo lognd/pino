@@ -193,6 +193,16 @@ implementing; docs win over guesses.
       SUPERHOT time flow (hard freeze on stillness; idle 6s -> 4s),
       poster/init/suspension fallback hardening after the black-hero
       report. All pure reducers unit-tested (158 unit green)
+- [x] Broken-image ROOT CAUSE (2026-07-05): '--' inside SVG XML
+      comments corrupted both brand assets ('<img>' decodes via the
+      strict XML parser); also viewBox-only SVGs have zero intrinsic
+      size in '<img>' (naturalWidth 0 -> w-auto collapses). Fixed +
+      regression test parses every public SVG strictly. NOTE for the
+      traced-asset TODO above: never put '--' in SVG comments
+- [x] Responsive pass (2026-07-05): nav flattens into a MENU/CLOSE
+      disclosure below lg (no wrap/overlap; 48px targets; Escape and
+      route-change close); hero capped at 85svh for short/ultrawide;
+      audited 360/500/768/1280/2560 viewports (axe suite still green)
 - [ ] HUMAN INPUT: pick flash variant in /hero-lab and carousel
       variant in /carousel-lab; confirm hero feel (energy rate, idle
       timer) on a real device

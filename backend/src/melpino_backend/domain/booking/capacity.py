@@ -30,8 +30,22 @@ async def lock_session_for_booking(
     lock is held until the caller's transaction commits/rolls back, so a
     second create_booking for the same session blocks here until the
     first finishes, then reads the already-updated seat count.
+
+    `populate_existing=True` is REQUIRED here, not cosmetic (mirrors
+    `lock_invoice_for_update`'s doc comment): if this row was already
+    loaded (unlocked) into the session's identity map earlier in the
+    same request, a FOR UPDATE re-select without `populate_existing`
+    would hand back the stale identity-mapped object's pre-lock
+    attribute values instead of the freshly-locked row -- silently
+    defeating the lock for callers that read the session before locking
+    it (see FINDINGS.md L1).
     """
-    stmt = select(ClassSession).where(ClassSession.id == session_id).with_for_update()
+    stmt = (
+        select(ClassSession)
+        .where(ClassSession.id == session_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     session = (await db.execute(stmt)).scalars().first()
     if session is None:
         logger.info("lock_session_for_booking: session_id=%s not found", session_id)

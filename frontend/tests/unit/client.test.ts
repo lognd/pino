@@ -8,9 +8,11 @@ import { apiGet, apiPost, ApiError, RateLimitedError } from "../../src/api/clien
 describe("api/client.ts", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    document.cookie = "csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT";
   });
 
-  it("attaches X-CSRF-Token on mutating admin requests", async () => {
+  it("attaches the real csrf_token cookie as X-CSRF-Token on mutating admin requests", async () => {
+    document.cookie = "csrf_token=real-secret-from-backend";
     const fetchMock = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit) =>
         new Response(JSON.stringify({ ok: true }), { status: 200 }),
@@ -20,7 +22,20 @@ describe("api/client.ts", () => {
     await apiPost("/api/admin/students", { name: "x" });
 
     const init = fetchMock.mock.calls[0][1] as RequestInit;
-    expect((init.headers as Record<string, string>)["X-CSRF-Token"]).toBe("mock-csrf-token");
+    expect((init.headers as Record<string, string>)["X-CSRF-Token"]).toBe("real-secret-from-backend");
+  });
+
+  it("attaches no X-CSRF-Token on a mutating admin request with no live session", async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiPost("/api/admin/students", { name: "x" });
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>)["X-CSRF-Token"]).toBeUndefined();
   });
 
   it("does not attach X-CSRF-Token on CSRF-exempt guest booking routes", async () => {

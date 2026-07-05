@@ -30,6 +30,15 @@ export class ApiError extends Error {
   }
 }
 
+// Reads the `csrf_token` cookie set by the backend on login
+// (auth/csrf.py::CSRF_COOKIE_NAME, api/auth.py::_set_session_cookies --
+// httponly=False specifically so JS can read it here). Returns undefined
+// when absent (no live session, e.g. logged out or pre-login).
+function readCsrfCookie(): string | undefined {
+  const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
 // Guest routes carry their own signed token in the URL and are CSRF-exempt
 // by design (docs/design/02); everything else (the admin surface) attaches
 // the CSRF header on mutating verbs.
@@ -69,7 +78,10 @@ async function request<T>(
     }
   }
   if (method !== "GET" && !isCsrfExemptPath(path)) {
-    headers["X-CSRF-Token"] = "mock-csrf-token";
+    const csrfToken = readCsrfCookie();
+    if (csrfToken) {
+      headers["X-CSRF-Token"] = csrfToken;
+    }
   }
 
   const response = await fetch(path, init);

@@ -10,7 +10,7 @@
 // no-JS/reduced-motion rungs -- standing in for the poster until the hero
 // module supplies one.
 
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { businessShortName } from "../../../lib/brand";
 import { CONTENT } from "../../../content/mock";
@@ -33,6 +33,41 @@ function HeroFallback() {
   );
 }
 
+/** A very faint scroll affordance over the hero's bottom edge, for first
+ * visitors who might not realize the page continues below the full-width
+ * hero. A hint, not a guide: muted, small, gently bobbing (CSS-only,
+ * stilled under prefers-reduced-motion), gone for good on first scroll.
+ * Decorative -- the content below is normally discoverable; aria-hidden. */
+function ScrollHint() {
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => {
+    if (window.scrollY > 40) {
+      setDismissed(true);
+      return;
+    }
+    const onScroll = (): void => {
+      if (window.scrollY > 40) setDismissed(true);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  return (
+    <div
+      aria-hidden="true"
+      className={`pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 transition-opacity duration-700 ${
+        dismissed ? "opacity-0" : "opacity-50"
+      }`}
+    >
+      <div className="mp-scroll-hint flex flex-col items-center gap-1 text-mp-muted">
+        <span className="text-sm font-semibold uppercase tracking-widest">Scroll</span>
+        <svg width="18" height="10" viewBox="0 0 18 10" fill="none">
+          <path d="M1 1l8 7 8-7" stroke="currentColor" strokeWidth="2" />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 export function Landing() {
   usePageMeta({
     title: CONTENT.meta.landing.title,
@@ -43,9 +78,12 @@ export function Landing() {
 
   return (
     <main>
-      <Suspense fallback={<HeroFallback />}>
-        <Hero />
-      </Suspense>
+      <div className="relative">
+        <Suspense fallback={<HeroFallback />}>
+          <Hero />
+        </Suspense>
+        <ScrollHint />
+      </div>
 
       {/* Intro block. Real, screen-reader/SEO-visible H1 -- independent of the
           hero's decorative aria-hidden wordmark (doc 08's acceptance criteria).

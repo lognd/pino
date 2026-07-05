@@ -78,3 +78,22 @@ body {
   }
 }
 
+/* Landing scroll hint: a gentle bob, CSS-only; stilled for reduced motion. */
+@keyframes mp-scroll-hint {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(4px);
+  }
+}
+.mp-scroll-hint {
+  animation: mp-scroll-hint 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mp-scroll-hint {
+    animation: none;
+  }
+}
+

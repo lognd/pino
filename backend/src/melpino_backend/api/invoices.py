@@ -87,13 +87,15 @@ def _to_response(invoice: Invoice) -> InvoiceResponse:
 
 
 class ManualPaymentRequest(BaseModel):
-    """Admin's manual-payment form."""
+    """Admin's manual-payment form. client_request_id is REQUIRED (see
+    domain/invoices/service.py's ManualPaymentInput doc comment)."""
 
     model_config = {}
 
     method: service.ManualPaymentMethod
     amount: Decimal
     note: str | None = None
+    client_request_id: str
 
 
 class RefundRequest(BaseModel):
@@ -212,6 +214,7 @@ async def record_manual_payment_endpoint(
             method=payload.method,
             amount=payload.amount,
             note=payload.note,
+            client_request_id=UUID(payload.client_request_id),
         ),
     )
     if result.is_err:

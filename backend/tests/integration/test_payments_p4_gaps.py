@@ -59,7 +59,9 @@ async def test_refund_replay_with_same_request_id_does_not_double_refund(
         db_session,
         invoice.id,
         admin.id,
-        ManualPaymentInput(method="zelle", amount=Decimal("100.00")),
+        ManualPaymentInput(
+            method="zelle", amount=Decimal("100.00"), client_request_id=uuid4()
+        ),
     )
     payment_id = payment_result.danger_ok
     invoice_id = invoice.id
@@ -112,7 +114,9 @@ async def test_refund_replay_with_mismatched_payment_id_is_rejected(
         db_session,
         invoice.id,
         admin.id,
-        ManualPaymentInput(method="zelle", amount=Decimal("100.00")),
+        ManualPaymentInput(
+            method="zelle", amount=Decimal("100.00"), client_request_id=uuid4()
+        ),
     )
     payment_id = payment_result.danger_ok
     invoice_id = invoice.id

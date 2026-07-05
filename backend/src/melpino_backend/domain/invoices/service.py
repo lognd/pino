@@ -17,6 +17,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from typani.result import Err, Ok, Result
 
 from melpino_backend.domain.payments import currency
@@ -43,13 +44,18 @@ ManualPaymentMethod = Literal["paypal", "zelle", "in_person", "other"]
 
 
 class ManualPaymentInput(BaseModel):
-    """Admin-entered manual payment fields."""
+    """Admin-entered manual payment fields. client_request_id is REQUIRED
+    (not server-minted), mirroring domain/invoices/refunds.py's
+    RefundInput -- a double-submitted/retried manual payment (double-
+    click, client retry, proxy replay) is recognized before a second
+    Payment row is ever inserted."""
 
     model_config = {}
 
     method: ManualPaymentMethod
     amount: Decimal = Field(gt=0)
     note: str | None = None
+    client_request_id: UUID
 
 
 class LineItemInput(BaseModel):
@@ -283,6 +289,17 @@ async def record_manual_payment(
     once recorded payments cover amount_total."""
     from melpino_backend.db.models.invoices import Payment
 
+    payment_id = payment.client_request_id
+    existing = await db.get(Payment, payment_id)
+    if existing is not None:
+        if existing.invoice_id != invoice_id:
+            return Err(InvoiceError.NotFound)
+        _log.info(
+            "record_manual_payment retry observed already-recorded payment",
+            extra={"invoice_id": str(invoice_id), "payment_id": str(payment_id)},
+        )
+        return Ok(existing.id)
+
     invoice = await lock_invoice_for_update(db, invoice_id)
     if invoice is None or invoice.deleted_at is not None:
         return Err(InvoiceError.NotFound)
@@ -291,19 +308,28 @@ async def record_manual_payment(
     if await has_pending_payment(db, invoice_id):
         return Err(InvoiceError.PaymentPending)
 
-    payment_id = uuid4()
-    db.add(
-        Payment(
-            id=payment_id,
-            invoice_id=invoice_id,
-            method=payment.method,
-            amount=payment.amount,
-            status="succeeded",
-            recorded_by=admin_id,
-            note=payment.note,
-        )
-    )
-    await db.flush()
+    try:
+        # A SAVEPOINT, not a bare flush -- mirrors refunds.py/webhooks.py:
+        # a concurrent retry racing us to insert the SAME client_request_id
+        # rolls back only this INSERT, not the whole request.
+        async with db.begin_nested():
+            db.add(
+                Payment(
+                    id=payment_id,
+                    invoice_id=invoice_id,
+                    method=payment.method,
+                    amount=payment.amount,
+                    status="succeeded",
+                    recorded_by=admin_id,
+                    note=payment.note,
+                )
+            )
+            await db.flush()
+    except IntegrityError:
+        existing = await db.get(Payment, payment_id)
+        if existing is not None:
+            return Ok(existing.id)
+        raise
     await settle_invoice_if_paid(db, invoice)
     _log.info(
         "record_manual_payment: invoice_id=%s payment_id=%s method=%s amount=%s",
@@ -635,7 +661,5 @@ async def attach_payment_proof(
         )
     )
     await db.flush()
-    _log.info(
-        "attach_payment_proof: invoice_id=%s proof_id=%s", invoice_id, proof_id
-    )
+    _log.info("attach_payment_proof: invoice_id=%s proof_id=%s", invoice_id, proof_id)
     return Ok(proof_id)

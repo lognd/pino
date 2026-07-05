@@ -52,7 +52,9 @@ async def test_manual_payment_recording(
         db_session,
         invoice.id,
         admin.id,
-        ManualPaymentInput(method="zelle", amount=Decimal("100.00")),
+        ManualPaymentInput(
+            method="zelle", amount=Decimal("100.00"), client_request_id=uuid4()
+        ),
     )
     assert result.is_ok
     await db_session.refresh(invoice)
@@ -73,7 +75,9 @@ async def test_manual_payment_partial_leaves_invoice_payable(
         db_session,
         invoice.id,
         admin.id,
-        ManualPaymentInput(method="zelle", amount=Decimal("40.00")),
+        ManualPaymentInput(
+            method="zelle", amount=Decimal("40.00"), client_request_id=uuid4()
+        ),
     )
     assert result.is_ok
     await db_session.refresh(invoice)
@@ -99,7 +103,9 @@ async def test_manual_payment_on_draft_invoice_is_rejected(
         db_session,
         invoice_id,
         admin.id,
-        ManualPaymentInput(method="zelle", amount=Decimal("50.00")),
+        ManualPaymentInput(
+            method="zelle", amount=Decimal("50.00"), client_request_id=uuid4()
+        ),
     )
     assert payment_result.is_err
     assert payment_result.danger_err is InvoiceError.InvalidState
@@ -118,7 +124,9 @@ async def test_refund_amount_exceeding_balance_is_rejected(
         db_session,
         invoice.id,
         admin.id,
-        ManualPaymentInput(method="zelle", amount=Decimal("100.00")),
+        ManualPaymentInput(
+            method="zelle", amount=Decimal("100.00"), client_request_id=uuid4()
+        ),
     )
     payment_id = payment_result.danger_ok
 
@@ -151,7 +159,9 @@ async def test_refund_manual_payment_in_full(
         db_session,
         invoice.id,
         admin.id,
-        ManualPaymentInput(method="zelle", amount=Decimal("100.00")),
+        ManualPaymentInput(
+            method="zelle", amount=Decimal("100.00"), client_request_id=uuid4()
+        ),
     )
     payment_id = payment_result.danger_ok
     await db_session.refresh(invoice)
@@ -232,7 +242,9 @@ async def test_concurrent_double_pay_is_serialized_by_row_lock(
                 session,
                 invoice_id,
                 admin_id,
-                ManualPaymentInput(method="zelle", amount=Decimal("100.00")),
+                ManualPaymentInput(
+                    method="zelle", amount=Decimal("100.00"), client_request_id=uuid4()
+                ),
             )
             await session.commit()
             return outcome

@@ -69,7 +69,19 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-mp-black text-mp-white">
-      <header className="border-b-2 border-mp-border px-4 py-4">
+      {/* On landing, the header floats OVER the hero artwork (transparent,
+          absolutely positioned) instead of pushing it down inside its own
+          bordered bar -- the MENU button and wordmark-logo link render on
+          top of the hero, not above a separate strip of black. Every other
+          route keeps the normal in-flow bordered header (there is no hero
+          there for it to overlay). */}
+      <header
+        className={
+          onLanding
+            ? "absolute inset-x-0 top-0 z-20 px-4 py-4"
+            : "border-b-2 border-mp-border px-4 py-4"
+        }
+      >
         <nav
           aria-label="Primary"
           className="mx-auto flex max-w-6xl items-center justify-between gap-4"
@@ -126,10 +138,12 @@ export function Shell({ children }: { children: ReactNode }) {
           </button>
         </nav>
 
-        {/* Expanded mobile panel: stacked, full-width, >=48px tap targets. */}
+        {/* Expanded mobile panel: stacked, full-width, >=48px tap targets.
+            Solid backing on landing (it floats over the busy hero artwork
+            there, unlike the plain black page background elsewhere). */}
         <div
           id="mp-nav-menu"
-          className={`${menuOpen ? "block" : "hidden"} lg:hidden`}
+          className={`${menuOpen ? "block" : "hidden"} lg:hidden ${onLanding ? "bg-mp-black" : ""}`}
         >
           <ul className="mx-auto mt-4 flex max-w-6xl flex-col border-t-2 border-mp-border pt-2">
             {NAV_ITEMS.map((item) => (

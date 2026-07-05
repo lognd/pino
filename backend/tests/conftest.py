@@ -71,7 +71,16 @@ async def db_session(_pg_url: str) -> AsyncGenerator[AsyncSession]:
     engine = create_async_engine(_pg_url)
     conn = await engine.connect()
     trans = await conn.begin()
-    session = AsyncSession(bind=conn, join_transaction_mode="create_savepoint")
+    # expire_on_commit=False matches db/base.py's init_engine() sessionmaker --
+    # without it, a mid-request db.commit() (e.g. booking/service.py's
+    # commit-then-notify, see FINDINGS.md L1) expires every ORM object in
+    # this session, and plain attribute access on an expired async object
+    # outside a fresh awaited query raises MissingGreenlet. Production never
+    # hits this because its real sessionmaker already sets this; the test
+    # fixture just hadn't matched it.
+    session = AsyncSession(
+        bind=conn, join_transaction_mode="create_savepoint", expire_on_commit=False
+    )
     try:
         yield session
     finally:

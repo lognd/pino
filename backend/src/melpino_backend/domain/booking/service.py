@@ -204,6 +204,13 @@ async def create_booking(
             invoice.id,
         )
 
+    # Commit before sending the confirmation email (see FINDINGS.md L1):
+    # without this, an outer commit failure after the email has already
+    # gone out leaves the guest holding a manage-token link that resolves
+    # to nothing. Mirrors the commit-then-notify pattern already used by
+    # api/webhooks.py and api/invoices_public.py for notify_payment_received.
+    # get_db()'s own end-of-request commit becomes a no-op on top of this.
+    await db.commit()
     await notify.notify_booking_confirmed(
         db, cfg, booking, manage_url_for(cfg, raw_token)
     )

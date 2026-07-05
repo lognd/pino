@@ -87,7 +87,13 @@ async def calendar_feed(
                 summary=title,
                 starts_at=session.starts_at,
                 ends_at=session.ends_at,
-                description=f"{int(booked)}/{session.capacity} seats booked",
+                # FINDINGS.md L3: the public subscribe feed is gated only
+                # by a URL-embedded key (calendar apps can't send admin
+                # session cookies), and that key leaks more easily than an
+                # authenticated session -- exact booked/capacity counts
+                # belong only on the staff-authed admin calendar view, not
+                # in a value anyone holding the URL can poll over time.
+                description=("Full" if int(booked) >= session.capacity else "Open"),
                 location=location,
             )
         )

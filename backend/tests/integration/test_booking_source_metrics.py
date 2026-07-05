@@ -155,7 +155,9 @@ async def test_calendar_feed_requires_the_key_and_serves_sessions(
         body = ok.text
         assert f"UID:session-{session.id}@melpino" in body
         assert "SUMMARY:Metrics Course" in body
-        assert "2/10 seats booked" in body
+        # FINDINGS.md L3: the public feed no longer exposes exact
+        # booked/capacity counts, only an "Open"/"Full" boolean.
+        assert "DESCRIPTION:Open" in body
 
 
 async def test_admin_feed_url_reflects_configuration(

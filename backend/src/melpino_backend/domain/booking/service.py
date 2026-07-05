@@ -366,6 +366,15 @@ async def offer_freed_seat(
         session_id,
         entry.id,
     )
+    # Commit before sending the offer email (see FINDINGS.md L2): the
+    # notified_at stamp is this function's own idempotency/cooldown key
+    # (see docstring), so it must be durable before the email that acts on
+    # it goes out. Mirrors cancel_booking's commit-before-notify fix
+    # above -- without it, a failed end-of-request commit rolls back the
+    # stamp while the offer email already went out, and the next
+    # freed-seat trigger re-selects and re-emails the same waitlister,
+    # bypassing the 1-hour cooldown.
+    await db.commit()
     await notify.notify_waitlist_offer(db, cfg, entry.id)
 
 

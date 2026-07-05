@@ -273,7 +273,13 @@ async def cancel_booking(
         logger.info("cancel_booking: session_id=%s un-flipped full", session.id)
 
     await notify.notify_booking_cancelled(db, cfg, booking)
-    freed = session.capacity - taken
+    # Offer sized to what THIS cancellation actually released
+    # (party_size), not the session's total current free capacity -- see
+    # FINDINGS.md L3: `session.capacity - taken` counts every free seat
+    # regardless of whether this cancel produced it, so a 1-seat cancel on
+    # a session with other pre-existing free capacity could offer to a
+    # waitlist party far larger than what just opened up.
+    freed = booking.party_size
     if freed > 0 and session.status != "cancelled":
         await offer_freed_seat(db, cfg, session.id, freed)
     return Ok(booking)

@@ -673,9 +673,14 @@ async def reconcile_pending_paypal_captures(
                     f"(paid_so_far={paid_so_far}, amount_total={invoice.amount_total})",
                 )
             await settle_invoice_if_paid(db, invoice)
-            # Capture before commit -- commit() expires ORM attributes,
-            # and a bare access afterward would sync-lazy-load outside
-            # the greenlet context this AsyncSession requires for I/O.
+            # Capture before commit. The sessionmaker sets
+            # expire_on_commit=False (db/base.py), so this isn't
+            # currently needed to avoid an expired-attribute lazy-load --
+            # it's defensive against that flag ever being flipped back to
+            # SQLAlchemy's default, which would expire ORM attributes on
+            # commit and make a bare access afterward sync-lazy-load
+            # outside the greenlet context this AsyncSession requires for
+            # I/O.
             paid_amount = payment.amount
             await db.commit()
             await db.refresh(invoice)

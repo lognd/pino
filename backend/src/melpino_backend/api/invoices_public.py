@@ -206,9 +206,13 @@ async def create_stripe_intent(token: str, db: AsyncSession = Depends(get_db)) -
     invoice.stripe_payment_intent_id = intent["id"]
     client_secret = intent["client_secret"]
     intent_id = intent["id"]
-    # Capture before commit -- commit() expires ORM attributes, and a
-    # bare attribute access afterward would lazy-load outside the
-    # greenlet context this AsyncSession requires for I/O.
+    # Capture before commit. The sessionmaker sets expire_on_commit=False
+    # (db/base.py), so this isn't currently needed to avoid an
+    # expired-attribute lazy-load -- it's defensive against that flag ever
+    # being flipped back to SQLAlchemy's default, which would expire ORM
+    # attributes on commit and make a bare attribute access afterward
+    # lazy-load outside the greenlet context this AsyncSession requires
+    # for I/O.
     invoice_id_str = str(invoice.id)
     await db.commit()
     _log.info(
@@ -355,9 +359,13 @@ async def capture_paypal_order_endpoint(
             notify_payment_received,
         )
 
-        # Re-load after commit -- commit() expires ORM attributes, and
-        # notify reads invoice.student_id/id/currency; a bare access
-        # would sync-lazy-load outside the greenlet context.
+        # Re-load after commit. The sessionmaker sets
+        # expire_on_commit=False (db/base.py), so this refresh isn't
+        # currently needed to avoid an expired-attribute lazy-load -- it's
+        # defensive against that flag ever being flipped back to
+        # SQLAlchemy's default, which would expire ORM attributes on
+        # commit; notify reads invoice.student_id/id/currency, and a bare
+        # access would then sync-lazy-load outside the greenlet context.
         await db.refresh(invoice)
         await notify_payment_received(db, _cfg, invoice, capture.captured_amount)
     return {"status": payment_status}

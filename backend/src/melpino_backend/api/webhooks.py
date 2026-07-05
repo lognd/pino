@@ -230,11 +230,14 @@ async def _handle_payment_intent_event(
                     "stripe_payment_intent_id": intent_id,
                 },
             )
-            # Capture what the email needs BEFORE commit -- commit()
-            # expires every attribute on `invoice`/`existing`, and a bare
-            # (unawaited) attribute access afterward would try to
-            # lazy-load synchronously and crash outside the greenlet
-            # context this AsyncSession requires for I/O.
+            # Capture what the email needs BEFORE commit. The sessionmaker
+            # sets expire_on_commit=False (db/base.py), so this isn't
+            # currently needed to avoid an expired-attribute lazy-load --
+            # it's defensive against that flag ever being flipped back to
+            # SQLAlchemy's default, which would expire `invoice`/`existing`
+            # on commit and make a bare (unawaited) attribute access
+            # afterward try to lazy-load synchronously, crashing outside
+            # the greenlet context this AsyncSession requires for I/O.
             paid_amount = existing.amount
             # Release the invoice row lock before the email send.
             await db.commit()

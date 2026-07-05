@@ -115,9 +115,14 @@ async def cancel_session(
     """Admin cancels a session, cascading notification emails (REQUIRED).
 
     Delegates to domain/courses/service.py::cancel_session, which flips
-    the session's status to 'cancelled' and fans out the REQUIRED
-    cancellation email to every confirmed booking via
-    notify.notify_session_cancelled.
+    the session's status to 'cancelled', flips every affected booking to
+    'cancelled' (and voids/flags its invoice), THEN fans out the
+    REQUIRED cancellation email by looping notify.notify_booking_cancelled
+    directly over the already-captured booking list -- deliberately NOT
+    via notify.notify_session_cancelled. That function re-queries
+    bookings by `status == "confirmed"`, which would find none once this
+    cascade has already flipped them all to 'cancelled', so calling it
+    here would silently send zero emails.
     """
     try:
         session_uuid = UUID(class_session_id)

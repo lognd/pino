@@ -121,7 +121,19 @@ async def create_stripe_intent(token: str, db: AsyncSession = Depends(get_db)) -
     still-live existing intent is reused rather than re-created -- Stripe
     would happily create as many PaymentIntents as asked, and a guest
     confirming two of them (double-clicked pay button, two open tabs)
-    would really be charged twice for one invoice."""
+    would really be charged twice for one invoice.
+
+    DELIBERATE (see FINDINGS.md L1): the invoice row lock is held across
+    the Stripe network round-trip rather than released beforehand the
+    way refunds.py releases its lock before a provider call. Releasing
+    it here would reopen the exact double-intent race this docstring
+    just described -- two concurrent requests would both pass the
+    "no existing intent" check before either could observe the other's
+    stripe_payment_intent_id, and both would create a fresh PaymentIntent
+    (see test_concurrent_stripe_intent_creation_yields_one_intent, which
+    pins this serialization as a required property). A slow/hung Stripe
+    call pinning this row's lock for its duration is the accepted
+    tradeoff for a guest-facing, low-volume pay-by-link surface."""
     import asyncio
 
     import stripe
@@ -240,7 +252,17 @@ async def capture_paypal_order_endpoint(
     Payment -- rejects a capture whose reference_id doesn't match THIS
     invoice (see paypal.PayPalCapture's own doc comment: never trust the
     client-supplied order_id belongs to the invoice URL it was posted
-    to)."""
+    to).
+
+    DELIBERATE (see FINDINGS.md L1): like create_stripe_intent, this
+    holds the invoice row lock across the PayPal capture network call
+    instead of releasing it first the way refunds.py does -- the
+    has_pending_payment / status guards above only prevent a second
+    capture from *starting* concurrently; they don't protect a capture
+    already in flight when nothing else is serializing writes to this
+    invoice's Payment rows. A slow/hung PayPal call pinning this row's
+    lock for its duration is the accepted tradeoff here, same reasoning
+    as create_stripe_intent."""
     invoice = await service.lock_invoice_for_update(
         db, (await _resolve_invoice(db, token)).id
     )

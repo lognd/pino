@@ -99,6 +99,20 @@ async def _reserved_so_far(db: "AsyncSession", payment_id: UUID) -> Decimal:
     return sum((r.amount for r in rows), Decimal(0))
 
 
+async def _fail_reservation(db: "AsyncSession", refund_id: UUID) -> None:
+    """Flips a "pending" reservation Refund row (inserted by refund_payment
+    right before the provider call) to "failed" after that provider call
+    itself failed -- otherwise the reservation would sit as "pending"
+    forever, permanently locking up amount it never actually moved (see
+    _reserved_so_far, which counts pending same as succeeded)."""
+    from melpino_backend.db.models.invoices import Refund
+
+    reservation = await db.get(Refund, refund_id)
+    if reservation is not None and reservation.status == "pending":
+        reservation.status = "failed"
+    await db.commit()
+
+
 async def refund_payment(
     db: "AsyncSession",
     cfg: "AppConfig",
@@ -182,6 +196,31 @@ async def refund_payment(
     # so committing/re-locking here would be pure overhead with no
     # benefit for that path.
     if is_stripe or is_paypal:
+        from melpino_backend.db.models.invoices import Refund
+
+        # Reserve the amount BEFORE releasing the lock/calling the
+        # provider: without this, two provider refunds with DIFFERENT
+        # client_request_ids can both read the same `remaining` above,
+        # both pass validation, and both call their provider, over-
+        # refunding the payment (each retry-id guard above only catches a
+        # retry of the SAME id). A "pending" Refund row makes this
+        # amount visible to _reserved_so_far for any concurrent refund
+        # attempt that locks the invoice after this one commits.
+        # _record_refund below flips this same row to its final status
+        # once the provider call returns -- it never inserts a second row
+        # for the provider path.
+        db.add(
+            Refund(
+                id=refund_id,
+                payment_id=payment.id,
+                invoice_id=invoice_id,
+                amount=amount,
+                reason=refund.reason,
+                status="pending",
+                recorded_by=admin_id,
+            )
+        )
+        await db.flush()
         await db.commit()
 
     stripe_refund_id: str | None = None
@@ -203,11 +242,10 @@ async def refund_payment(
                 extra={"payment_id": str(payment.id)},
                 exc_info=exc,
             )
+            await _fail_reservation(db, refund_id)
             return Err(PaymentProviderError.RequestFailed)
         stripe_refund_id = stripe_refund["id"]
-        refund_status = STRIPE_REFUND_STATUS_MAP.get(
-            stripe_refund["status"], "pending"
-        )
+        refund_status = STRIPE_REFUND_STATUS_MAP.get(stripe_refund["status"], "pending")
     elif is_paypal:
         result = await paypal.refund_capture(
             cfg,
@@ -217,6 +255,7 @@ async def refund_payment(
             idempotency_key=idempotency_key,
         )
         if result.is_err:
+            await _fail_reservation(db, refund_id)
             return Err(result.danger_err)
         paypal_refund_id = result.danger_ok.refund_id
         refund_status = _PAYPAL_REFUND_STATUS_MAP.get(
@@ -255,12 +294,20 @@ async def _record_refund(
     """Short follow-up transaction: re-locks the invoice, re-validates the
     remaining balance for a MANUAL refund only (a provider-backed refund
     already moved real money regardless of what this INSERT does), and
-    writes the Refund row."""
+    writes the Refund row.
+
+    For a provider-backed refund (stripe_refund_id/paypal_refund_id set),
+    refund_payment already inserted a "pending" reservation row for
+    refund_id BEFORE calling the provider (see its own comment) -- this
+    UPDATEs that same row to its final status rather than inserting a
+    second one, so the reservation and the settled row are always the
+    same row."""
     from melpino_backend.db.models.invoices import Payment, Refund
 
     invoice = await lock_invoice_for_update(db, invoice_id)
+    is_provider = stripe_refund_id is not None or paypal_refund_id is not None
 
-    if stripe_refund_id is None and paypal_refund_id is None:
+    if not is_provider:
         already_recorded = (
             await db.execute(select(Refund).where(Refund.id == refund_id))
         ).scalar_one_or_none()
@@ -279,19 +326,46 @@ async def _record_refund(
 
     try:
         async with db.begin_nested():
-            db.add(
-                Refund(
-                    id=refund_id,
-                    payment_id=payment_id,
-                    invoice_id=invoice_id,
-                    amount=amount,
-                    reason=reason,
-                    stripe_refund_id=stripe_refund_id,
-                    paypal_refund_id=paypal_refund_id,
-                    status=status,
-                    recorded_by=admin_id,
+            if is_provider:
+                reserved = (
+                    await db.execute(select(Refund).where(Refund.id == refund_id))
+                ).scalar_one_or_none()
+                if reserved is None:
+                    # Should not happen (refund_payment always reserves
+                    # before calling a provider) -- fall back to an
+                    # INSERT so the provider refund is never silently
+                    # lost.
+                    db.add(
+                        Refund(
+                            id=refund_id,
+                            payment_id=payment_id,
+                            invoice_id=invoice_id,
+                            amount=amount,
+                            reason=reason,
+                            stripe_refund_id=stripe_refund_id,
+                            paypal_refund_id=paypal_refund_id,
+                            status=status,
+                            recorded_by=admin_id,
+                        )
+                    )
+                else:
+                    reserved.status = status
+                    reserved.stripe_refund_id = stripe_refund_id
+                    reserved.paypal_refund_id = paypal_refund_id
+            else:
+                db.add(
+                    Refund(
+                        id=refund_id,
+                        payment_id=payment_id,
+                        invoice_id=invoice_id,
+                        amount=amount,
+                        reason=reason,
+                        stripe_refund_id=stripe_refund_id,
+                        paypal_refund_id=paypal_refund_id,
+                        status=status,
+                        recorded_by=admin_id,
+                    )
                 )
-            )
             await db.flush()
     except IntegrityError:
         # Common case: a retry that reused the same idempotency key got
@@ -343,9 +417,7 @@ async def _record_refund(
                     )
                 )
             ).scalars()
-            total_refunded_on_invoice = sum(
-                (r.amount for r in refund_rows), Decimal(0)
-            )
+            total_refunded_on_invoice = sum((r.amount for r in refund_rows), Decimal(0))
             if total_refunded_on_invoice >= invoice.amount_total:
                 invoice.status = "refunded"
                 await db.flush()

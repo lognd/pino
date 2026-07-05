@@ -138,10 +138,18 @@ async def cancel_session(
     """
     from melpino_backend.app.config import AppConfig
     from melpino_backend.db.models.bookings import Booking
+    from melpino_backend.domain.booking.capacity import lock_session_for_booking
     from melpino_backend.domain.notifications import notify
 
     assert isinstance(cfg, AppConfig)
-    session = await db.get(ClassSession, session_id)
+    # FINDINGS.md M2: take the same FOR UPDATE row lock create_booking
+    # takes (lock_session_for_booking) instead of a bare db.get, so this
+    # serializes against a concurrent create_booking on the same session.
+    # Without it, a booking could pass its own under-lock status guard
+    # after this function's stale unlocked read, then commit a confirmed
+    # booking on a session this function has already flipped (and
+    # cascaded) to cancelled.
+    session = await lock_session_for_booking(db, session_id)
     if session is None:
         logger.info("cancel_session: session_id=%s not found", session_id)
         return Err(CourseError.NotFound)

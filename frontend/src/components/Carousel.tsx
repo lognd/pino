@@ -30,12 +30,26 @@ export interface CarouselProps {
 
 const SWIPE_THRESHOLD_PX = 50;
 
+/** One uniform stage ratio for every slide, regardless of each item's own
+ * manifest aspect -- mixed portrait/landscape/square boxes made the track
+ * height jump between slides ("looks weird with different aspect ratios").
+ * Images cover-crop into it; full-bleed videos/images letterbox (contain). */
+const STAGE_ASPECT = "16 / 9";
+
 /** Renders the media for one slide -- image via LazyMedia, video via the
  * click-to-play gate (doc 15). One place so every variant treats media the
  * same way. */
 function SlideMedia({ item, fit = "cover" }: { item: MediaItem; fit?: "cover" | "contain" }) {
-  if (item.kind === "video") return <ClickToPlayVideo item={item} />;
-  return <LazyMedia src={item.src} alt={item.alt} aspect={item.aspect} fit={fit} />;
+  if (item.kind === "video") return <ClickToPlayVideo item={item} aspectRatio={STAGE_ASPECT} />;
+  return (
+    <LazyMedia
+      src={item.src}
+      alt={item.alt}
+      aspect={item.aspect}
+      aspectRatio={STAGE_ASPECT}
+      fit={fit}
+    />
+  );
 }
 
 /** Shared controls: labeled prev/next + a skewed "N of M" counter chip. */
@@ -58,15 +72,14 @@ function CarouselControls({
         <span aria-hidden="true">&larr;</span>
         {MEDIA_COPY.carousel.prevLabel}
       </button>
-      {/* Skewed counter chip -- the --mp-skew accent, red key-line, PLAIN
-          text "N of M" (never dots-only), per doc 15. */}
+      {/* Counter chip: red key-line, PLAIN UPRIGHT text "N of M" (never
+          dots-only), per doc 15. No skew -- the counter is data, and the
+          lean read as italics (user feedback 2026-07-05). */}
       <p
         aria-live="polite"
-        className="-skew-mp border-2 border-mp-red bg-mp-surface px-4 py-2 text-lg font-bold uppercase text-mp-white"
+        className="border-2 border-mp-red bg-mp-surface px-4 py-2 text-lg font-bold uppercase not-italic text-mp-white"
       >
-        <span className="inline-block skew-x-[8deg]">
-          {formatCounter(MEDIA_COPY.carousel.counterTemplate, index + 1, total)}
-        </span>
+        {formatCounter(MEDIA_COPY.carousel.counterTemplate, index + 1, total)}
       </p>
       <button type="button" onClick={onNext} className={btn}>
         {MEDIA_COPY.carousel.nextLabel}
@@ -190,12 +203,11 @@ export function Carousel({ items, variant = "edge-peek", ariaLabel }: CarouselPr
 
         {variant === "full-bleed" && (
           <>
-            {/* Overlaid skewed counter chip, red key-line -- the only place
-                red appears on this variant (active-accent rule). */}
-            <p className="-skew-mp pointer-events-none absolute right-4 top-4 border-2 border-mp-red bg-mp-black-true/80 px-3 py-1 text-lg font-bold uppercase text-mp-white">
-              <span className="inline-block skew-x-[8deg]">
-                {formatCounter(MEDIA_COPY.carousel.counterTemplate, index + 1, total)}
-              </span>
+            {/* Overlaid counter chip, red key-line -- the only place red
+                appears on this variant (active-accent rule). Upright, no
+                skew (user feedback 2026-07-05). */}
+            <p className="pointer-events-none absolute right-4 top-4 border-2 border-mp-red bg-mp-black-true/80 px-3 py-1 text-lg font-bold uppercase not-italic text-mp-white">
+              {formatCounter(MEDIA_COPY.carousel.counterTemplate, index + 1, total)}
             </p>
             {items[index]?.caption && (
               <p className="absolute inset-x-0 bottom-0 bg-mp-black-true/80 px-4 py-3 text-lg text-mp-white">

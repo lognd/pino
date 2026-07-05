@@ -33,6 +33,14 @@ export interface MediaItem {
   aspect: "landscape" | "portrait" | "square";
 }
 
+/** aspect-ratio CSS value per manifest `aspect` -- THE one mapping (used by
+ * LazyMedia and ClickToPlayVideo) so every box reserves space the same way. */
+export const ASPECT_RATIO: Record<MediaItem["aspect"], string> = {
+  landscape: "16 / 9",
+  portrait: "3 / 4",
+  square: "1 / 1",
+};
+
 // Base for media URLs. Empty in dev (paths below are already absolute
 // /local-media/ URLs Vite serves). A real deploy sets VITE_MEDIA_BASE_URL to
 // the R2 public base (e.g. https://files.example.com) so the same manifest

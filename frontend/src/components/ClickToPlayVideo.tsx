@@ -12,22 +12,18 @@
 
 import { useRef, useState } from "react";
 import type { MediaItem } from "../content/media";
-import { MEDIA_COPY } from "../content/media";
-
-const ASPECT_RATIO: Record<MediaItem["aspect"], string> = {
-  landscape: "16 / 9",
-  portrait: "3 / 4",
-  square: "1 / 1",
-};
+import { ASPECT_RATIO, MEDIA_COPY } from "../content/media";
 
 export interface ClickToPlayVideoProps {
   item: MediaItem;
+  /** Override the box's CSS aspect-ratio (see LazyMedia). */
+  aspectRatio?: string;
   className?: string;
 }
 
 /** A poster + play button that mounts a real <video> only on click, and
  * shows a plain-words message if the video cannot be loaded. */
-export function ClickToPlayVideo({ item, className }: ClickToPlayVideoProps) {
+export function ClickToPlayVideo({ item, aspectRatio, className }: ClickToPlayVideoProps) {
   const [activated, setActivated] = useState(false);
   const [failed, setFailed] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -35,7 +31,7 @@ export function ClickToPlayVideo({ item, className }: ClickToPlayVideoProps) {
   const boxClass = `relative w-full overflow-hidden border-2 border-mp-border bg-mp-black-true${
     className ? ` ${className}` : ""
   }`;
-  const boxStyle = { aspectRatio: ASPECT_RATIO[item.aspect] } as const;
+  const boxStyle = { aspectRatio: aspectRatio ?? ASPECT_RATIO[item.aspect] } as const;
 
   function activate() {
     setActivated(true);

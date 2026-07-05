@@ -6,14 +6,7 @@
 // arrive. Hard-edged per doc 09 (radius 0, 2px border) -- no rounding.
 
 import type { MediaItem } from "../content/media";
-
-/** aspect-ratio CSS value per manifest `aspect` -- one mapping so every box
- * on the site reserves space the same way (doc 15). */
-const ASPECT_RATIO: Record<MediaItem["aspect"], string> = {
-  landscape: "16 / 9",
-  portrait: "3 / 4",
-  square: "1 / 1",
-};
+import { ASPECT_RATIO } from "../content/media";
 
 export interface LazyMediaProps {
   /** Image URL to load (thumb or full src, caller's choice). */
@@ -23,18 +16,29 @@ export interface LazyMediaProps {
   aspect: MediaItem["aspect"];
   /** object-fit: cover fills+crops the box; contain letterboxes. */
   fit?: "cover" | "contain";
+  /** Override the box's CSS aspect-ratio (e.g. a carousel forcing one
+   * uniform stage ratio across mixed-aspect items). Defaults to the item's
+   * own manifest aspect. */
+  aspectRatio?: string;
   className?: string;
 }
 
 /** A layout-stable lazy image: reserves its aspect box up front, then loads
  * the image lazily/asynchronously into it. */
-export function LazyMedia({ src, alt, aspect, fit = "cover", className }: LazyMediaProps) {
+export function LazyMedia({
+  src,
+  alt,
+  aspect,
+  fit = "cover",
+  aspectRatio,
+  className,
+}: LazyMediaProps) {
   return (
     <div
       className={`relative w-full overflow-hidden border-2 border-mp-border bg-mp-surface${
         className ? ` ${className}` : ""
       }`}
-      style={{ aspectRatio: ASPECT_RATIO[aspect] }}
+      style={{ aspectRatio: aspectRatio ?? ASPECT_RATIO[aspect] }}
     >
       <img
         src={src}

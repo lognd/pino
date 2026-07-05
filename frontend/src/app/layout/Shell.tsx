@@ -18,6 +18,7 @@ import { Link, useLocation } from "react-router-dom";
 import { businessLegalName, businessShortName } from "../../lib/brand";
 import { CONTENT } from "../../content/mock";
 import { useBulletholeClicks } from "../../hero/useBulletholeClicks";
+import { StaticWordmark } from "../../hero/Wordmark";
 
 const NAV_LINK =
   "text-lg font-semibold text-mp-white underline-offset-4 hover:underline";
@@ -84,10 +85,11 @@ export function Shell({ children }: { children: ReactNode }) {
               className="flex min-w-0 items-center gap-2"
               {...bulletProps}
             >
-              {/* aspect-[8/3] + h-10, NOT w-auto: Chromium reports zero
-                  intrinsic size for SVG <img>s here, and w-auto collapsed
-                  the logo to 0px (invisible nav logo bug). */}
-              <img src="/brand/wordmark.svg" alt="" className="aspect-[8/3] h-10" />
+              {/* Inline StaticWordmark, not the <img> asset: the backlink
+                  logo must be EXACTLY the landing lockup (same letters,
+                  same webfont, uncracked) -- an <img> SVG cannot use the
+                  page font. Explicit aspect + height (no auto sizing). */}
+              <StaticWordmark className="aspect-[48/19] h-10" />
               <span className="sr-only">{businessShortName} -- home</span>
             </Link>
           )}

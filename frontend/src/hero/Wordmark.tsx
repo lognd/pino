@@ -371,6 +371,29 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
   );
 });
 
+/** The assembled lockup, static, no fracture machinery at all -- for chrome
+ * like the nav's backlink-home logo. Inline SVG (not an <img> asset) so it
+ * uses the page webfont and is EXACTLY the hero lockup, letter for letter
+ * (same LETTERS table -- NO DUPLICATION), just never cracked. No ids, so
+ * any number can mount alongside the hero without defs collisions. */
+export function StaticWordmark({ className }: { className?: string }) {
+  // Cropped to the glyph extents (the hero's 640x240 field is mostly
+  // breathing room) so the lockup fills its box in chrome contexts.
+  return (
+    <svg
+      viewBox="105 20 480 190"
+      className={className}
+      role="presentation"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {LETTERS.map((_, i) => (
+        <g key={i}>{letterGlyph(i)}</g>
+      ))}
+    </svg>
+  );
+}
+
 /** Wire a container's pointer events into a WordmarkHandle (cursor-reactive
  * pieces). One home for the listener set so Hero and /hero-lab never drift. */
 export function useWordmarkPointer(

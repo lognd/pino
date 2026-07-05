@@ -30,15 +30,26 @@ export interface Hole {
 }
 
 /** Total fade lifetime in ms (kept in sync with the CSS animation below and the
- * removal timer in useBulletholeClicks.ts). ~80ms pop-in then a slow fade. */
+ * removal timer in useBulletholeClicks.ts). Hole pops first (fast), cracks
+ * radiate from it, then a slow fade. */
 export const HOLE_LIFETIME_MS = 720;
+/** Hole pop-in duration (ms) -- the hole lands FIRST and fast. */
+const POP_MS = 70;
+/** Crack growth: starts as the pop lands, radiates outward. */
+const CRACK_GROW_MS = 150;
+const CRACK_BASE_DELAY_MS = 55;
+/** Per-crack stagger span (ms) so the network radiates, not blinks. */
+const CRACK_STAGGER_MS = 70;
 
 const DARK = "#0A0A0B";
 const WHITE = "#F4F4F2";
 const RED = "#E8112D";
 
-/** Overlay box side (px), inside the doc's 48-72px footprint. */
-export const SIZE = 64;
+/** DAMAGE footprint radius (px) -- the doc's 48-72px visual footprint. */
+const DAMAGE_R = 32;
+/** Overlay box side (px): larger than the damage so no crack is ever
+ * flat-clipped at the box edge (the old 64px box truncated long cracks). */
+export const SIZE = 96;
 const R = SIZE / 2;
 
 /** One rendered crack: a kinked polyline plus its stroke width + opacity. */
@@ -62,7 +73,7 @@ export interface BulletholeGeometry {
 export function buildBullethole(seed: number): BulletholeGeometry {
   // Irregular dark core: 8-10 vertices at a jittered radius (never a circle).
   const coreVerts = 8 + Math.floor(hash01(seed * 3 + 1) * 3);
-  const coreBaseR = R * 0.17;
+  const coreBaseR = DAMAGE_R * 0.17;
   const core: Point[] = [];
   for (let i = 0; i < coreVerts; i++) {
     const a = (i / coreVerts) * Math.PI * 2;
@@ -82,7 +93,7 @@ export function buildBullethole(seed: number): BulletholeGeometry {
     const dirY = Math.sin(a);
     const start: Point = { x: R + dirX * ringR, y: R + dirY * ringR };
     radialStarts.push(start);
-    const length = R * (0.5 + hash01(seed * 13 + i) * 0.42);
+    const length = DAMAGE_R * (0.5 + hash01(seed * 13 + i) * 0.42);
     const segs = 3 + Math.floor(hash01(seed * 17 + i) * 2); // 3-4 kinked segs.
     const points = buildBranch(start, dirX, dirY, length, segs, seed * 23 + i * 5 + 1, 0.4);
     cracks.push({
@@ -131,7 +142,10 @@ export function buildBullethole(seed: number): BulletholeGeometry {
   return { core, ringR, cracks };
 }
 
-/** One rendered hole: layered SVG glass damage, centered on the click. */
+/** One rendered hole: layered SVG glass damage, centered on the click.
+ * Sequenced like the real thing: the HOLE lands first and fast (~70ms pop),
+ * then the cracks RADIATE outward from it (pathLength dash growth with a
+ * seeded per-crack stagger), then the whole mark slowly fades. */
 function BulletholeMark({ hole }: { hole: Hole }) {
   const g = buildBullethole(hole.seed);
   const corePts = g.core.map((p) => `${p.x},${p.y}`).join(" ");
@@ -144,26 +158,43 @@ function BulletholeMark({ hole }: { hole: Hole }) {
         position: "absolute",
         left: hole.x - R,
         top: hole.y - R,
-        animation: `mp-bullethole ${HOLE_LIFETIME_MS}ms cubic-bezier(0.2,0.7,0.3,1) forwards`,
+        overflow: "visible",
+        animation: `mp-bullethole-fade ${HOLE_LIFETIME_MS}ms linear forwards`,
       }}
     >
-      {/* Kinked branching + tangential cracks (drawn under the core/ring). */}
+      {/* Kinked branching + tangential cracks, growing OUT of the hole. */}
       <g fill="none" stroke={WHITE} strokeLinecap="round" strokeLinejoin="round">
-        {g.cracks.map((crack, i) => (
-          <polyline
-            key={i}
-            points={crack.points.map((p) => `${p.x},${p.y}`).join(" ")}
-            strokeWidth={crack.width}
-            opacity={crack.opacity}
-          />
-        ))}
+        {g.cracks.map((crack, i) => {
+          const delay =
+            CRACK_BASE_DELAY_MS + hash01(hole.seed * 83 + i) * CRACK_STAGGER_MS;
+          return (
+            <polyline
+              key={i}
+              points={crack.points.map((p) => `${p.x},${p.y}`).join(" ")}
+              strokeWidth={crack.width}
+              opacity={crack.opacity}
+              pathLength={1}
+              strokeDasharray={1}
+              strokeDashoffset={1}
+              style={{
+                animation: `mp-crack-grow ${CRACK_GROW_MS}ms cubic-bezier(0.2,0.8,0.4,1) ${delay.toFixed(0)}ms forwards`,
+              }}
+            />
+          );
+        })}
       </g>
-      {/* Bright crushed ring around the impact. */}
-      <circle cx={R} cy={R} r={g.ringR} fill="none" stroke={WHITE} strokeWidth={1.6} opacity={0.9} />
-      {/* Irregular dark core with a thin red-hot edge. */}
-      <polygon points={corePts} fill={DARK} stroke={RED} strokeWidth={1.2} />
-      {/* White-hot centre. */}
-      <circle cx={R} cy={R} r={g.ringR * 0.28} fill={WHITE} />
+      {/* The hole itself: pops in first, fast (crushed ring + dark core). */}
+      <g
+        style={{
+          animation: `mp-hole-pop ${POP_MS}ms cubic-bezier(0.2,0.9,0.4,1.4) forwards`,
+          transformOrigin: `${R}px ${R}px`,
+          opacity: 0,
+        }}
+      >
+        <circle cx={R} cy={R} r={g.ringR} fill="none" stroke={WHITE} strokeWidth={1.6} opacity={0.9} />
+        <polygon points={corePts} fill={DARK} stroke={RED} strokeWidth={1.2} />
+        <circle cx={R} cy={R} r={g.ringR * 0.28} fill={WHITE} />
+      </g>
     </svg>
   );
 }
@@ -184,11 +215,17 @@ export function BulletholeOverlay({ holes }: { holes: Hole[] }) {
       }}
     >
       <style>
-        {`@keyframes mp-bullethole {
-            0%   { opacity: 0; transform: scale(0.5); }
-            11%  { opacity: 1; transform: scale(1.06); }
-            22%  { transform: scale(1); }
-            100% { opacity: 0; transform: scale(1); }
+        {`@keyframes mp-hole-pop {
+            0%   { opacity: 0; transform: scale(0.25); }
+            100% { opacity: 1; transform: scale(1); }
+          }
+          @keyframes mp-crack-grow {
+            0%   { stroke-dashoffset: 1; }
+            100% { stroke-dashoffset: 0; }
+          }
+          @keyframes mp-bullethole-fade {
+            0%, 45% { opacity: 1; }
+            100%    { opacity: 0; }
           }`}
       </style>
       {holes.map((h) => (

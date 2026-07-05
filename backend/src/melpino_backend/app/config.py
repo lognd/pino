@@ -210,6 +210,29 @@ class AppConfig(BaseModel):
     def _args_to_dict(args: argparse.Namespace) -> dict[str, object]:
         return {k: v for k, v in vars(args).items() if v is not None}
 
+    # FINDINGS.md M1: source-visible constant. `looks_like_real_deployment`
+    # below gates the fail-closed boot guard on this exact value, so
+    # anything above must not be a plausible-looking secret an operator
+    # could mistake for a real one -- keep it here, not duplicated.
+    _INSECURE_SESSION_SECRET = "dev-only-insecure-secret"
+    _DEV_PUBLIC_BASE_URL_MARKERS = ("localhost", "127.0.0.1", "SITE-DOMAIN-TBD")
+
+    def looks_like_real_deployment(self) -> bool:
+        """True once `public_base_url` has been set to something other
+        than a localhost/dev/placeholder value -- the signal this app
+        uses to distinguish "somebody's actual deploy" from local dev/CI,
+        where AppConfig is legitimately constructed with every insecure
+        default left in place (FINDINGS.md M1)."""
+        base_url = self.public_base_url.lower()
+        return not any(
+            marker.lower() in base_url for marker in self._DEV_PUBLIC_BASE_URL_MARKERS
+        )
+
+    def has_insecure_session_secret(self) -> bool:
+        """True if `session_secret` is still the hard-coded, source-visible
+        dev default -- see the field's own doc comment and FINDINGS.md M1."""
+        return self.session_secret == self._INSECURE_SESSION_SECRET
+
     @property
     def invoice_business_name(self) -> str:
         """The name shown on invoice letterhead -- derived from

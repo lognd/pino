@@ -225,6 +225,29 @@ class App:
         shutdown."""
         from melpino_backend.db.base import dispose_engine, init_engine
 
+        # FINDINGS.md M1: session_secret signs pay-by-link and unsubscribe
+        # tokens (derive_pay_token, sign_unsubscribe_token). Its default is
+        # a hard-coded, source-visible constant -- fine for local dev/CI
+        # (AppConfig is deliberately constructed with it in many test
+        # fixtures), but refuse to boot if this looks like a real
+        # deployment (public_base_url no longer a localhost/dev/placeholder
+        # value) with that default still in place. Mirrors the webhook
+        # path's existing fail-closed check on the "whsec_fake" constant.
+        if (
+            self._config.has_insecure_session_secret()
+            and self._config.looks_like_real_deployment()
+        ):
+            _log.error(
+                "refusing to start: SESSION_SECRET is unset (still the "
+                "insecure dev default) while public_base_url=%s looks like "
+                "a real deployment",
+                self._config.public_base_url,
+            )
+            raise RuntimeError(
+                "SESSION_SECRET must be set to a real secret before "
+                "starting with a non-dev public_base_url"
+            )
+
         _log.info("starting up: initializing database engine")
         init_engine(self._config.database_url)
         await self._seed_admin_if_configured()

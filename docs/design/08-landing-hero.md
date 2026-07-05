@@ -35,6 +35,23 @@ shatter was too uniform. The following are now hard requirements:
   layered bloom with a hot white core and brief red rim, subtle film
   grain/vignette over the whole hero field, no confetti-like sparks.
   If a detail cannot be made to look deliberate, cut it.
+- REVISION 3 (user verdict on the first Revision-2 pass: casing and
+  flash "still look childish"): both need a real art-direction pass.
+  The FLASH: no cartoon starburst -- a 2-3 frame-equivalent sliver of
+  the timeline where exposure blows out (whole field lifts), a hot
+  elongated core with proper falloff (inverse-square-ish gradient
+  stops, slight horizontal anamorphic stretch), a one-frame red rim,
+  then instant decay into drifting smoke + lingering rim light. The
+  CASING: small, fast, and specular -- correct relative scale (a 9mm
+  case is TINY against a viewport wordmark; err small), rendered as
+  a brass-toned capsule with a bright specular glint line and rim
+  highlight, motion-stretched along its velocity when moving fast,
+  visible tumble via its silhouette (foreshortened ellipse cycle),
+  entering hot and decelerating believably. Palette exception
+  granted: a desaturated brass (one muted gold tone) is permitted
+  for the casing only. If after honest effort the casing still reads
+  cheap, drop it below the fold of perception (near-subliminal
+  speed/size) rather than shipping a cartoon.
 
 - Cursor maps to progress across an INNER ACTIVE BAND, not the full
   viewport: the band spans the central region of the hero, inset at
@@ -49,28 +66,32 @@ shatter was too uniform. The following are now hard requirements:
   motion feels weighty, never twitchy. Fast mouse sweeps produce a
   fast-but-smooth scrub, micro-jitters produce nothing visible.
 - Idle (no pointer movement for 3s, pointer left the hero, or touch
-  devices where there is no hover): REVISED -- the sequence settles
-  home instead of ping-ponging. Progress eases slowly (4-6s,
-  ease-out) toward the nearest assembled extreme (0 if progress <
-  SHOT_MOMENT, else 1), so the wordmark visibly DRIFTS BACK TOGETHER
-  and comes to rest whole. At rest the hero stays subtly alive
-  through ambient smoke/grain only -- no progress movement. Any
-  pointer movement inside the active band blends back to cursor
-  control over ~500ms (no snap). Touch devices: a single slow
-  settle-through on load (0 -> 1 over ~8s, one time), then rest.
+  devices where there is no hover): REVISION 3 -- progress eases
+  slowly (4-6s, ease-out) back to 0, ALWAYS (not "nearest extreme":
+  the right extreme is now the held-shattered state, so settling
+  right would freeze the logo broken). The wordmark visibly DRIFTS
+  BACK TOGETHER on inaction, every time. At rest the hero stays
+  subtly alive through ambient smoke/grain only -- no progress
+  movement. Any pointer movement inside the active band blends back
+  to cursor control over ~500ms (no snap). Touch devices: one slow
+  pass on load (0 -> 1 over ~8s), then the same settle back to 0.
 - **Reactive wordmark**: the lockup shatters and recombines on the
   same timeline. Define `SHOT_MOMENT` (progress value where the
   muzzle flash peaks, e.g. 0.35). As progress crosses outward from
   SHOT_MOMENT the wordmark's fragments fly apart (translate + rotate,
   slight scale, motion-blur-suggesting opacity falloff), with
   per-fragment random vectors seeded once (stable across frames).
-  Shatter envelope (RESOLVED during implementation -- an earlier
-  wording contradicted the extremes-identity acceptance test): a
-  side-normalized tent, `u = |p-SHOT| / (p<SHOT ? SHOT : 1-SHOT)`,
-  `shatter = smoothstep(1-u)` -- peak displacement exactly AT
-  SHOT_MOMENT, exactly zero at progress 0 and 1, still a pure
-  function of |progress - SHOT_MOMENT|. See
-  `frontend/src/hero/shards.ts`. As progress returns,
+  Shatter envelope (REVISION 3 -- supersedes the earlier tent rule;
+  binding user feedback): the shatter PERSISTS at the right extreme.
+  `shatter(p) = 0 for p <= SHOT_MOMENT`, then rises
+  (`smoothstep((p - SHOT_MOMENT) / (1 - SHOT_MOMENT))`) to FULL
+  displacement at p = 1 and stays there. Pixel-perfect reassembly is
+  required ONLY at p = 0. Scrubbing left reassembles (still a pure
+  function of progress); parking the cursor full-right leaves the
+  lockup blown apart -- that is the point. Idle settle-home
+  consequently ALWAYS targets 0 (see the idle rule), so "on
+  inaction, MEL PINO comes back together." Touch intro becomes
+  0 -> 1 -> settle back to 0. See `frontend/src/hero/shards.ts`. As progress returns,
   fragments recombine. It is a pure function of progress -- scrubbing
   backward reassembles it exactly; there is NO independent timer loop.
 
@@ -118,20 +139,28 @@ export interface ScrubSource {
   nowhere else. Exposes `progress` to both the source and the
   wordmark so they can never desync.
 - `hero/Wordmark.tsx` -- inline SVG lockup (MEL in red, PINO in
-  white, heavy condensed italic per 09) pre-split into ~12-20 shard
+  white, heavy condensed italic per 09) pre-split into shard
   polygons; a pure `progress -> transform` map per shard. Fragments
-  must reassemble to a pixel-perfect lockup at progress extremes.
-  REVISED shatter-quality bar (Revision 2): uniform triangle grids
-  read as cheap. Shards must follow a RADIAL CRACK tessellation
-  seeded from an impact point on the lockup (roughly where the muzzle
-  points): long slivers radiating from impact, smaller fragments near
-  it, larger slabs at the periphery -- like laminated glass. Per-shard
-  motion gets (a) a small deterministic stagger (shards nearer the
-  impact move earlier/farther on the shatter envelope), (b) depth
-  cues: rotation up to ~25deg, scale 0.92-1.06, opacity falloff with
-  distance, (c) displacement along the radial vector from impact,
-  never a uniform explosion. Still a pure function of progress --
-  determinism and extremes-identity rules are unchanged.
+  must reassemble to a pixel-perfect lockup at progress 0 (Revision
+  3: the right extreme stays shattered).
+  REVISION 3 shatter-quality bar (supersedes Revision 2's plain
+  radial tessellation -- user verdict: "just lines", not good
+  enough): the crack network must be BRANCHY AND FRACTAL-LIKE, real
+  broken-glass morphology, not spokes. Generate recursively and
+  deterministically (seeded once): primary cracks radiate from the
+  impact point with per-segment angular jitter (each crack is a
+  POLYLINE of 3-6 kinked segments, never one straight line);
+  each primary spawns 1-3 SECONDARY branches at random points along
+  its length, deviating 20-45deg, shorter; secondaries may spawn
+  tertiaries near the impact. Shards are the cells of this branched
+  network (near-impact cells small and splintery, periphery large
+  slabs). RENDER THE CRACKS: during shatter, hairline strokes
+  (mp-white at low alpha, brighter near impact) trace the network on
+  the lockup as separation grows -- the visible branching is what
+  sells glass. Per-shard motion keeps Revision 2's stagger/rotation/
+  scale/opacity depth cues along the (now kinked) radial paths.
+  Purity and determinism rules unchanged; identity now required at
+  p = 0 only (see the envelope rule above).
 - `hero/Bullethole.tsx` + `hero/useBulletholeClicks.ts` (Revision 2,
   NEW) -- click feedback for interactive elements site-wide: on
   pointerdown on an opted-in element (nav links, CTA buttons), spawn
@@ -170,9 +199,13 @@ export interface ScrubSource {
 
 ## Acceptance criteria (the prototype demo checklist)
 
-- Scrub right/left advances/reverses smoothly; releasing the pointer
-  mid-sequence parks briefly, then the sequence settles home and the
-  wordmark visibly reassembles (Revision 2 idle rule).
+- Scrub right/left advances/reverses smoothly; parking full-right
+  holds the lockup shattered; releasing the pointer anywhere parks
+  briefly, then the sequence settles back to 0 and the wordmark
+  visibly reassembles (Revision 3 idle rule).
+- The crack pattern reads as branched broken glass (kinked polyline
+  cracks with secondary/tertiary branches, hairlines rendered during
+  separation) -- never straight spokes.
 - The blast reads as fired from a consistent point just off-frame
   (directional spill, casing entry, smoke all agree on the origin);
   no weapon imagery is drawn. Scrub only engages inside the inset

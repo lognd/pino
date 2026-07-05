@@ -330,6 +330,24 @@ async def record_manual_payment(
         if existing is not None:
             return Ok(existing.id)
         raise
+    # Overpay guard, matching the Stripe webhook (_flag_if_already_covered)
+    # and both PayPal paths (FINDINGS.md L3): a mis-keyed manual amount
+    # (e.g. a Zelle amount typo'd 10x too large) should surface for
+    # review the same way an overpaying provider capture does, instead
+    # of settling silently with the overcollection visible nowhere.
+    paid_so_far = await get_paid_so_far(db, invoice)
+    if paid_so_far > invoice.amount_total:
+        _log.warning(
+            "manual payment overpays invoice; recorded anyway, needs "
+            "follow-up/refund",
+            extra={"invoice_id": str(invoice_id), "payment_id": str(payment_id)},
+        )
+        await flag_invoice_needs_review(
+            db,
+            invoice,
+            f"manual payment overpays invoice (paid_so_far={paid_so_far}, "
+            f"amount_total={invoice.amount_total})",
+        )
     await settle_invoice_if_paid(db, invoice)
     _log.info(
         "record_manual_payment: invoice_id=%s payment_id=%s method=%s amount=%s",
@@ -391,8 +409,24 @@ async def get_amount_due(db: "AsyncSession", invoice: "Invoice") -> Decimal:
 async def settle_invoice_if_paid(db: "AsyncSession", invoice: "Invoice") -> bool:
     """Marks invoice 'paid' once its succeeded payments cover
     amount_total. Idempotent -- a no-op if already paid or still short.
-    Returns True iff this call is what flipped it."""
+    Returns True iff this call is what flipped it.
+
+    Only settles an invoice still awaiting payment (`sent` or
+    `overdue`). A `void`/`draft`/`cancelled`/`refunded` invoice is never
+    resurrected to `paid` -- e.g. a session cancellation voids the
+    invoice while a PayPal capture is still `pending`; when that capture
+    later reconciles as `COMPLETED`, the invoice must NOT flip back to
+    `paid` (see reconcile_pending_paypal_captures, which instead flags
+    `needs_review` for a manual refund in that case)."""
     if invoice.status == "paid":
+        return False
+    if invoice.status not in ("sent", "overdue"):
+        _log.warning(
+            "settle_invoice_if_paid: refusing to settle invoice in "
+            "status=%s (not sent/overdue)",
+            invoice.status,
+            extra={"invoice_id": str(invoice.id), "invoice_status": invoice.status},
+        )
         return False
     paid_so_far = await get_paid_so_far(db, invoice)
     if paid_so_far >= invoice.amount_total:
@@ -594,6 +628,34 @@ async def reconcile_pending_paypal_captures(
             )
         ).scalar_one_or_none()
         if invoice is not None:
+            if invoice.status not in ("sent", "overdue", "paid"):
+                # Invoice was voided/cancelled (e.g. session cancelled)
+                # while this PayPal capture was still pending. Do NOT
+                # resurrect it to paid -- the money landed after the
+                # invoice was no longer payable; surface it for a
+                # manual refund instead of silently flipping status
+                # and emailing "payment received".
+                _log.warning(
+                    "paypal capture completed for a non-payable invoice "
+                    "(status=%s); flagging for manual refund review",
+                    invoice.status,
+                    extra={
+                        "invoice_id": str(invoice.id),
+                        "payment_id": str(payment.id),
+                        "invoice_status": invoice.status,
+                    },
+                )
+                await flag_invoice_needs_review(
+                    db,
+                    invoice,
+                    "captured PayPal funds landed on a "
+                    f"{invoice.status} invoice (e.g. cancelled session) "
+                    "-- refund owed",
+                )
+                await db.commit()
+                settled_count += 1
+                continue
+
             paid_so_far = await get_paid_so_far(db, invoice)
             if paid_so_far > invoice.amount_total:
                 _log.warning(

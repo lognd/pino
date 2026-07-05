@@ -162,7 +162,7 @@ implementing; docs win over guesses.
 - [ ] HUMAN INPUT: demo to Mel; record per-screen answers in 14;
       then re-scope P7+ admin build accordingly
 
-## User-feedback rounds (docs/design/08 Revisions 2-4, doc 15)
+## User-feedback rounds (docs/design/08 Revisions 2-5, doc 15)
 
 - [x] Hero R2: off-frame origin, inset band, settle-home, radial
       shatter, bullethole component + Shell/BigButton wiring
@@ -179,6 +179,14 @@ implementing; docs win over guesses.
       landing strip, gallery/ R2 namespace, sync script (run at P7)
 - [x] Nav: wordmark logo far-left home link on non-landing pages;
       "Home" text item removed
+- [x] Hero R5 ("laggy, buggy, flash game" 2026-07-05): imperative
+      frame path (no per-frame React state; WordmarkHandle; ~60-shard
+      budget; defs/use artwork; quiescent idle skip), FlashGuard fixes
+      the black-flash self-suppression bug (+unit tests), heavy-glass
+      shatter constants, wisp smoke, masked rim-light overlay replaces
+      per-shard strokes, resize re-init, CSS rest-state ambience.
+      Verified: 141 unit + 54 system green; headless fps probe 43.9
+      (old) -> 54.8 (new, at the headless vsync ceiling)
 - [ ] HUMAN INPUT: pick flash variant in /hero-lab and carousel
       variant in /carousel-lab; confirm hero feel (energy rate, idle
       timer) on a real device

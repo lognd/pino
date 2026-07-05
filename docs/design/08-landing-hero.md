@@ -123,6 +123,51 @@ shatter was too uniform. The following are now hard requirements:
   fragments recombine. It is a pure function of progress -- scrubbing
   backward reassembles it exactly; there is NO independent timer loop.
 
+REVISION 5 (binding user feedback, 2026-07-05: "laggy, buggy, and
+like a flash game" -- needs "professional and super polished"):
+
+- **Laggy (root cause + hard rule).** The rAF loop published progress
+  through React state every frame, re-rendering the hero tree -- and
+  ~120 clipped copies of the two-`<text>` lockup -- at 60fps. HARD
+  RULE: no per-frame React state, ever. The rAF loop hands frames to
+  an `onFrame` callback; the canvas renders there and the wordmark is
+  driven through an imperative `WordmarkHandle.setProgress` that
+  writes shard transforms straight to the DOM. React state updates
+  only on mode/lowPower changes plus a ~4Hz lab readout, and not at
+  all at rest (`isQuiescent` skips idle repaints entirely).
+- **Shard budget.** The tessellation is capped at ~5 radial bands per
+  sector (~60 shards, was 120+): shard count is the hero's paint
+  budget because every shard paints the full clipped lockup. The
+  artwork exists once in `<defs>` and shards reference it via `<use>`.
+  The shard layer enters the DOM on FIRST separation and is
+  display-toggled afterwards (refines Revision 4's "mount only once
+  separation begins": the regression test pins the INITIAL mount, and
+  the break moment never pays a 60-node mount mid-interaction).
+- **Buggy (the black flash).** The old photosensitivity guard latched
+  "already flashed" the instant displayed luminance crossed 0.25
+  mid-rise, then zeroed its own target: the flash suppressed itself
+  and SHOT_MOMENT rendered a pure black frame. The guard is now
+  `FlashGuard` (timeline.ts, unit-tested): the FIRST traversal of the
+  beat displays in full (rise and decay), the latch engages only once
+  the flash is spent, re-arm happens near home, a flash frozen
+  mid-beat dies out in wall-clock (~250ms hold), and dL/dt stays
+  rate-clamped throughout.
+- **Flash game (visual rules).** Heavy glass, not confetti: per-shard
+  rotation <= 9deg, scale within +-3%, opacity floor 0.8 (deep fades
+  overlapped into double-exposure mush), max travel 110 units. Smoke
+  is drift-elongated rotated wisps (two layers each), never round
+  grey puffs. The per-shard stroked rim highlight is REMOVED -- it
+  redrew the whole crack wireframe during every flash beat (the
+  Revision 4 "break-lines" leak, reborn); rim light is now ONE white
+  artwork copy behind a left-to-right fading mask whose opacity rides
+  flashEnvelope. The exposure beat is directional (origin-side spill
+  over a weaker full-field wash) so the frame blows out from the
+  origin, not into flat grey.
+- **Robustness.** Container resizes re-size the canvas backing store
+  and re-init the source (gradients are device-pixel); rest-state
+  ambience is a CSS-only drifting haze (doc rule "subtly alive at
+  rest"), disabled under prefers-reduced-motion.
+
 ## Architecture: one interface, two sources (the swap contract)
 
 We do not have real footage yet. Simulate first; when Mel's real

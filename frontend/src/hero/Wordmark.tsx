@@ -52,7 +52,7 @@ import {
   rotWobbleDeg,
   type PiecePhysicsState,
 } from "./piecePhysics";
-import { flashEnvelope } from "./timeline";
+import { flashEnvelope, FlashGuard } from "./timeline";
 
 const RED = "#E8112D";
 const WHITE = "#F4F4F2";
@@ -250,6 +250,14 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
   const appliedProgress = useRef<number>(-1);
   const requestedProgress = useRef<number>(progress);
 
+  // One-shot WCAG guard for the rim light -- same class the simulated
+  // source uses for its own exposure/bloom flash (timeline.ts's FlashGuard).
+  // Without this, the raw symmetric gaussian envelope fires on EVERY pass
+  // through SHOT_MOMENT, forward or backward: the rim visibly re-flashed on
+  // the settle-home reverse pass, and re-entering the wordmark bounds while
+  // still mid-cycle (progress not yet back down near 0) retriggered it too.
+  const flashGuard = useRef(new FlashGuard());
+
   // Baby physics (Revision 7): offsets/velocities per piece + scratch arrays
   // for the pieces' current base positions (cursor force acts where pieces
   // visibly are). Recreated when the fracture geometry changes.
@@ -260,6 +268,7 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
     physics.current = createPiecePhysics(pieces.length);
     baseX.current = new Float32Array(pieces.length);
     baseY.current = new Float32Array(pieces.length);
+    flashGuard.current.reset();
   }, [pieces]);
 
   /** Pointer in viewBox coords (null = away), fed by setPointer. */
@@ -288,7 +297,8 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
       appliedProgress.current = p;
 
       if (rimRef.current) {
-        const rim = flashEnvelope(p) * RIM_MAX;
+        const guardedFlash = flashGuard.current.step(flashEnvelope(p), p, rawDt);
+        const rim = guardedFlash * RIM_MAX;
         rimRef.current.setAttribute("opacity", rim < 0.005 ? "0" : rim.toFixed(4));
       }
       if (staticRef.current) {

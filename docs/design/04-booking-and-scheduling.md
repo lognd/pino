@@ -181,3 +181,19 @@ for the accessibility bar this flow is measured against.
 - Deposits/payments -> [05-payments-and-invoicing.md](05-payments-and-invoicing.md)
 - Attestation text -> [06-waivers-and-legal.md](06-waivers-and-legal.md)
 - Screen visuals -> [09-design-system.md](09-design-system.md)
+
+## Addendum (2026-07-05): booking source + calendar sync
+
+- `bookings.source` ('web' | 'admin', migration 0001): who produced
+  the booking -- the public site flow stamps 'web' (the API never
+  accepts the field from clients), Mel's manual/on-behalf entry
+  stamps 'admin'. This split is the site owner's fee-billing data;
+  api/admin_metrics.py aggregates it (totals + monthly, bookings and
+  seats, cancelled excluded).
+- Calendar sync: a key-gated subscribable ICS feed of all non-draft,
+  non-cancelled sessions (api/calendar.py; CALENDAR_FEED_KEY is the
+  auth because calendar apps cannot carry admin cookies; 404 on bad
+  key so the secret is not oracle-able), and per-booking calendar
+  affordances on the manage surface (.ics download + prefilled
+  Google Calendar link, both derived from the manage token). Pure
+  RFC 5545 generation lives in domain/calendar/ics.py.

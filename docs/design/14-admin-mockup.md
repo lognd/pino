@@ -283,3 +283,29 @@ checklist. Anything that outlives the mockup belongs in one of the docs
 above.
 </content>
 </invoke>
+
+## Addendum (2026-07-05): calendar, logs, and billing metrics
+
+Three owner-requested screens/tiles, mockup-first like everything else
+here (MSW path-mirroring; the backend endpoints already exist):
+
+- **/admin/calendar** -- month-grid widget of sessions (chips show
+  time, course, seats filled; click-through to session detail) plus
+  the SYNC TO GOOGLE CALENDAR box: the subscribable ICS feed URL
+  (backend api/calendar.py, key-gated via CALENDAR_FEED_KEY) with a
+  copy button and plain-words subscribe instructions. Grid math is
+  pure (frontend lib/calendarGrid.ts) and buckets by LOCAL day.
+- **/admin/logs** -- logand.app's admin logs portal pattern: live
+  JSON-log tail with a level filter, rotated-file downloads
+  (backend api/admin_logs.py), and the current browser session's
+  client-side log (lib/logging.ts) with an export button.
+- **Dashboard "Bookings by source" tile** -- web vs manually-entered
+  booking counts and seat totals, all-time + current month (backend
+  api/admin_metrics.py over bookings.source). These numbers are the
+  owner's site-fee billing data: the split must stay trustworthy,
+  which is why source is stamped server-side only (public API cannot
+  set it) and cancelled bookings are excluded.
+
+Public side of the same round: confirmed bookings' manage pages offer
+"Add to Google Calendar" and a .ics download (docs/design/04's manage
+surface; backend serves both from the manage token).

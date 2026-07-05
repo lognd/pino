@@ -215,6 +215,16 @@ implementing; docs win over guesses.
       variant in /carousel-lab; confirm hero feel (energy rate, idle
       timer) on a real device
 
+- [x] Owner round (2026-07-05): bookings.source web-vs-admin billing
+      metrics (migration 0001 + api/admin_metrics.py + dashboard tile);
+      ICS calendar sync (pure RFC 5545 builder, key-gated feed,
+      per-booking .ics + Google link on manage pages, /admin/calendar
+      month widget + subscribe box); admin logs portal (/admin/logs +
+      api/admin_logs.py, logand pattern); nav logo fades instead of
+      unmounting. Backend 121 + frontend 196 tests green
+- [ ] HUMAN INPUT: set CALENDAR_FEED_KEY (long random string) at
+      deploy time so Mel's Google Calendar subscribe link works
+
 ## P7 -- Deploy (docs/design/11)
 
 - [ ] Dockerfile + compose prod stack boots locally end-to-end

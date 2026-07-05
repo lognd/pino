@@ -10,15 +10,18 @@ import { apiGet, apiPost } from "./client";
 
 export interface Me {
   user_id: string;
-  role: "admin";
+  role: "admin" | "staff";
 }
 
 export function fetchMe(): Promise<Me> {
   return apiGet<Me>("/api/auth/me");
 }
 
-export function login(email: string, password: string): Promise<{ status: string }> {
-  return apiPost<{ status: string }>("/api/auth/login", { email, password });
+// Backend returns MeResponse ({user_id, role}), not {status} -- see
+// api/auth.py::login. Typed as Me so any future caller that trusts the
+// return value gets the real shape instead of `undefined`.
+export function login(email: string, password: string): Promise<Me> {
+  return apiPost<Me>("/api/auth/login", { email, password });
 }
 
 export function logout(): Promise<{ status: string }> {

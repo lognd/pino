@@ -49,8 +49,13 @@ async def flip_past_sessions_to_completed(db: "AsyncSession") -> int:
 
 
 async def run_daily_sweep(db: "AsyncSession", cfg: "AppConfig") -> tuple[int, int, int]:
-    """Runs the whole daily sweep in one transaction (the caller commits):
-    returns (reminders_sent, sessions_completed, paypal_captures_reconciled).
+    """Runs the whole daily sweep as a sequence of independently-committing
+    idempotent steps -- NOT a single transaction (FINDINGS.md L1). Step 3
+    (reconcile_pending_paypal_captures) commits internally per pending
+    payment, so a later failure in this function does not roll back the
+    reminders/completions already applied by steps 1-2; the caller's own
+    final commit only covers whatever wasn't already committed by step 3.
+    Returns (reminders_sent, sessions_completed, paypal_captures_reconciled).
     Safe to re-run -- all three steps are idempotent (reminders via the
     ledger, completion via the status guard, PayPal reconciliation via its
     own per-payment row lock)."""

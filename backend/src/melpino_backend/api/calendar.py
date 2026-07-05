@@ -62,7 +62,7 @@ async def calendar_feed(
             Booking.session_id,
             func.coalesce(func.sum(Booking.party_size), 0).label("booked"),
         )
-        .where(Booking.status == "confirmed")
+        .where(Booking.status.in_(("confirmed", "attended", "no_show")))
         .group_by(Booking.session_id)
         .subquery()
     )

@@ -12,7 +12,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from melpino_backend.api.errors import to_http_exception
@@ -74,7 +74,7 @@ class BookingCreateRequest(BaseModel):
 
     session_id: str
     full_name: str
-    email: str
+    email: EmailStr
     phone: str | None = None
     party_size: int = 1
     attestation: AttestationInput = AttestationInput()

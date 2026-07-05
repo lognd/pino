@@ -21,7 +21,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from melpino_backend.api.errors import to_http_exception
@@ -153,7 +153,7 @@ class OnBehalfBookingRequest(BaseModel):
 
     session_id: str
     full_name: str
-    email: str
+    email: EmailStr
     phone: str | None = None
     party_size: int = 1
     attestation_accepted: bool = False

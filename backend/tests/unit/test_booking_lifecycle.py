@@ -235,7 +235,7 @@ async def test_honeypot_field_filled_rejects_silently(
     payload = BookingCreateRequest(
         session_id=str(session.id),
         full_name="Bot Botson",
-        email="bot@example.test",
+        email="bot@example.com",
         honeypot_field="filled-by-a-bot",
     )
     response = await create_booking_endpoint(payload, db=db_session, _rl=None)

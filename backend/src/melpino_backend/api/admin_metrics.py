@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from melpino_backend.auth.sessions import SessionInfo, require_admin
 from melpino_backend.db.base import get_db
 from melpino_backend.db.models.bookings import Booking
+from melpino_backend.db.models.class_sessions import ClassSession
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,13 @@ async def bookings_by_source(
     'admin' = entered manually), all-time and per month (YYYY-MM, newest
     first). Party sizes are summed separately so per-seat billing is also
     answerable from the same response."""
-    not_cancelled = Booking.status != "cancelled"
+    # A booking whose own row is still 'confirmed' but whose *session* was
+    # cancelled produced no business either (see M1 in FINDINGS.md) -- join
+    # ClassSession so those drop out of the billing numbers too, without
+    # requiring cancel_session to bulk-flip every affected booking row.
+    not_cancelled = (Booking.status != "cancelled") & (
+        ClassSession.status != "cancelled"
+    )
 
     totals_stmt = (
         select(
@@ -37,6 +44,7 @@ async def bookings_by_source(
             func.count(Booking.id),
             func.coalesce(func.sum(Booking.party_size), 0),
         )
+        .join(ClassSession, ClassSession.id == Booking.session_id)
         .where(not_cancelled)
         .group_by(Booking.source)
     )
@@ -52,6 +60,7 @@ async def bookings_by_source(
             func.count(Booking.id),
             func.coalesce(func.sum(Booking.party_size), 0),
         )
+        .join(ClassSession, ClassSession.id == Booking.session_id)
         .where(not_cancelled)
         .group_by("month", Booking.source)
         .order_by(month.desc())

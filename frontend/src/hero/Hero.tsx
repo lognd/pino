@@ -244,7 +244,7 @@ export function Hero() {
           imperatively once live -- the hero stays branded even if the
           poster asset never arrives. */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div ref={wordmarkRef} className={stacked ? "w-1/2 max-w-xs" : "w-3/4 max-w-3xl"}>
+        <div ref={wordmarkRef} className={stacked ? "w-2/3 max-w-sm" : "w-3/4 max-w-3xl"}>
           <Wordmark ref={wordmarkHandle} stacked={stacked} className="w-full" />
         </div>
       </div>

@@ -95,24 +95,40 @@ const LETTERS: LetterEntry[] = [
  * re-centered per row and stacked vertically with a row gap. The constant
  * +31 x-offset between rect.x and textX is the skewX(-9) pre-shift, true
  * for every letter in the horizontal table -- kept identical here. */
-const STACKED_ROW_GAP = 24;
+const STACKED_ROW_GAP = 10;
+const STACKED_MARGIN_Y = 16;
 const STACKED_FIELD_W = 320;
-function stackedRow(letters: LetterEntry[], rowTop: number, textY: number): LetterEntry[] {
+// Each row is centered in the field, then nudged by its own offset -- MEL
+// sits left of center, PINO right of it, so the two words stagger instead
+// of stacking dead-center (a small diagonal lean, not a rigid column).
+const STACKED_OFFSET_X_MEL = -22;
+const STACKED_OFFSET_X_PINO = 14;
+function stackedRow(
+  letters: LetterEntry[],
+  rowTop: number,
+  textY: number,
+  offsetX: number,
+): LetterEntry[] {
   const left = letters[0].rect.x;
   const right = letters[letters.length - 1].rect.x + letters[letters.length - 1].rect.w;
   const rowWidth = right - left;
-  const margin = (STACKED_FIELD_W - rowWidth) / 2;
+  const margin = (STACKED_FIELD_W - rowWidth) / 2 + offsetX;
   return letters.map((l) => {
     const x = margin + (l.rect.x - left);
     return { ...l, textY, rect: { ...l.rect, x, y: rowTop }, textX: x + (l.textX - l.rect.x) };
   });
 }
 const STACKED_LETTERS: LetterEntry[] = [
-  ...stackedRow(LETTERS.slice(0, 3), 28, 168), // MEL
-  ...stackedRow(LETTERS.slice(3, 7), 28 + 168 + STACKED_ROW_GAP, 168 + 168 + STACKED_ROW_GAP), // PINO
+  ...stackedRow(LETTERS.slice(0, 3), STACKED_MARGIN_Y, 168, STACKED_OFFSET_X_MEL), // MEL
+  ...stackedRow(
+    LETTERS.slice(3, 7),
+    STACKED_MARGIN_Y + 168 + STACKED_ROW_GAP,
+    168 + 168 + STACKED_ROW_GAP,
+    STACKED_OFFSET_X_PINO,
+  ), // PINO
 ];
 export const STACKED_VIEW_W = STACKED_FIELD_W;
-export const STACKED_VIEW_H = 28 + 168 + STACKED_ROW_GAP + 168 + 28;
+export const STACKED_VIEW_H = STACKED_MARGIN_Y + 168 + STACKED_ROW_GAP + 168 + STACKED_MARGIN_Y;
 
 /** One letter's glyph, in the shared condensed-italic lean. */
 function letterGlyph(letters: LetterEntry[], index: number, fillOverride?: string) {

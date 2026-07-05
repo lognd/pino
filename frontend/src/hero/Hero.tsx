@@ -18,7 +18,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Wordmark, useWordmarkPointer, type WordmarkHandle } from "./Wordmark";
 import { timeFlowScale, type ScrubMachineState } from "./scrubMachine";
 import { useScrub } from "./useScrub";
-import { prefersReducedMotion, isTouchDevice, isNarrowViewport } from "./env";
+import { prefersReducedMotion, isTouchDevice, useIsNarrowViewport } from "./env";
 import type { ScrubSource } from "./timeline";
 import { createHeroSource, resolveHeroSourceKind } from "./sources/select";
 import { logDebug, logWarn } from "../lib/logging";
@@ -51,7 +51,7 @@ export function Hero() {
   const [posterBroken, setPosterBroken] = useState(false);
   const [reduced] = useState<boolean>(prefersReducedMotion);
   const [touch] = useState<boolean>(isTouchDevice);
-  const [stacked] = useState<boolean>(isNarrowViewport);
+  const stacked = useIsNarrowViewport();
 
   // Frame-accurate progress of the latest draw (for post-resize repaints).
   const progressRef = useRef(0);

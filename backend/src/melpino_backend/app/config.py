@@ -27,7 +27,14 @@ class AppConfig(BaseModel):
     # logand.app app/config.py's identical field + comment.
     redis_url: str | None = None
     session_secret: str = "dev-only-insecure-secret"
-    payment_processor_secret: str = "sk_test_fake"
+    # None means "not configured" -- matching paypal_client_id/secret's
+    # own None-means-unconfigured convention. A plausible-looking
+    # "sk_test_fake" default here previously made GET /api/config report
+    # stripe:true even when Stripe was never actually set up (flagged
+    # during P2; fixed in P4 -- see docs/design/05). Tests that need
+    # Stripe to appear configured must set this explicitly, e.g. via
+    # app_config fixture overrides or PAYMENT_PROCESSOR_SECRET.
+    payment_processor_secret: str | None = None
     stripe_webhook_secret: str = "whsec_fake"
     # None means "talk to the real api.stripe.com" -- only ever set to
     # something else in test/CI, pointing at testing/fake_stripe.py.

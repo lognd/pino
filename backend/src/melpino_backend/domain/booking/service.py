@@ -168,6 +168,35 @@ async def create_booking(
         payload.party_size,
     )
 
+    # Deposit auto-invoice (docs/design/04's deposit contract, wired in
+    # P4/docs/design/05): a course with deposit > 0 gets its deposit
+    # invoiced immediately, linked via bookings.invoice_id, so the guest
+    # can pay it right away from the manage page. A deposit=0 course
+    # (the common case -- "pay in full/in person") never touches
+    # invoices at all.
+    from melpino_backend.db.models.courses import Course
+    from melpino_backend.domain.invoices.service import create_deposit_invoice
+
+    course = await db.get(Course, session.course_id)
+    assert course is not None  # FK RESTRICT: a session's course always exists
+    if course.deposit > 0:
+        invoice, _raw_pay_token = await create_deposit_invoice(
+            db,
+            cfg,
+            student_id=student.id,
+            booking_id=booking.id,
+            course_title=course.title,
+            course_deposit=course.deposit,
+            party_size=payload.party_size,
+        )
+        booking.invoice_id = invoice.id
+        await db.flush()
+        logger.info(
+            "create_booking: booking_id=%s linked to deposit invoice_id=%s",
+            booking.id,
+            invoice.id,
+        )
+
     await notify.notify_booking_confirmed(
         db, cfg, booking, manage_url_for(cfg, raw_token)
     )

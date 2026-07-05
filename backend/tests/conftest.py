@@ -84,9 +84,13 @@ async def db_session(_pg_url: str) -> AsyncGenerator[AsyncSession]:
 @pytest.fixture
 def app_config() -> AppConfig:
     """An AppConfig with test-safe defaults -- fake payment/mail API bases
-    so nothing in a test can ever reach a real external service."""
+    so nothing in a test can ever reach a real external service.
+    payment_processor_secret is set explicitly here (AppConfig's own
+    default is None/unconfigured, see app/config.py) since most payment
+    tests need Stripe to read as configured."""
     return AppConfig(
         session_secret="test-only-secret",
+        payment_processor_secret="sk_test_fake",
         stripe_api_base="http://127.0.0.1:1/fake-stripe",
         paypal_api_base="http://127.0.0.1:1/fake-paypal",
         gmail_api_base="http://127.0.0.1:1/fake-gmail",

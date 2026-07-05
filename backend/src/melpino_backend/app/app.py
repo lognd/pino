@@ -32,8 +32,16 @@ _access_log = get_logger("melpino_backend.access")
 # - /api/bookings POST + /api/bookings/manage/* (guest surface: no
 #   session cookie exists for guests at all; rate limits + attestation
 #   are the defense instead, see docs/design/02-auth-and-security.md)
+# - /api/pay/* (docs/design/05's pay-by-link surface, and 01's guest-
+#   surface CSRF reasoning above applies identically here: a guest
+#   paying an invoice has no admin session cookie at all -- there is no
+#   session to CSRF against in the first place. The pay TOKEN itself is
+#   the auth (see domain/invoices/service.py's find_invoice_by_pay_token,
+#   same mint/hash/404-on-any-failure discipline as booking manage
+#   tokens), so double-submit CSRF protection would be defending nothing
+#   here while adding no real safety.
 _CSRF_EXEMPT_PATHS = frozenset({"/api/auth/login"})
-_CSRF_EXEMPT_PREFIXES = ("/api/webhooks", "/api/bookings")
+_CSRF_EXEMPT_PREFIXES = ("/api/webhooks", "/api/bookings", "/api/pay")
 
 
 class App:
@@ -197,6 +205,7 @@ class App:
         app.include_router(courses.router)
         app.include_router(bookings.router)
         app.include_router(invoices.router)
+        app.include_router(invoices.sessions_router)
         app.include_router(invoices_public.router)
         app.include_router(webhooks.router)
         app.include_router(admin_schedule.router)

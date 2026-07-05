@@ -83,23 +83,51 @@ implementing; docs win over guesses.
 
 ## P4 -- Payments (docs/design/05)
 
-- [ ] Copy+adapt: domain/invoices (service, refunds, stats, pdf/),
+- [x] Copy+adapt: domain/invoices (service, refunds, stats, pdf/),
       domain/payments/providers/paypal.py, api/webhooks.py,
-      testing/fake_stripe.py + fake_paypal.py
-- [ ] Invoice pay-tokens (pay_token_hash) + /pay/{token} page
-- [ ] Deposit auto-invoice on booking (04/05 contract)
-- [ ] Manual payment recording endpoint (admin)
-- [ ] melpinoinvoice.cls letterhead w/ business_legal_name
-- [ ] Payment idempotency/tamper/race tests copied + green
+      testing/fake_stripe.py + fake_paypal.py + currency.py.
+      stats.py now done (+ GET /api/admin/invoices/stats);
+      recurrence.py stubbed w/ TODO(recurrence), unwired ("low
+      priority" per doc 05 + Deferred below).
+- [x] Invoice pay-tokens + /pay/{token} page -- BACKEND half only:
+      STABLE derived tokens (HMAC(session_secret, invoice_id) -- an
+      emailed link keeps working for the invoice's life; secret
+      rotation = global revocation w/ re-key heal), GET/POST
+      /api/pay/{token}/... surface, CSRF-exempt. Frontend /pay page
+      NOT built yet (separate frontend task).
+- [ ] P4 test gaps (agent interrupted; suite otherwise green 61+14):
+      PDF renderer unit tests (LaTeX-escape chokepoint; latexmk IS
+      present on this host, compiles a real PDF), refund-replay,
+      per-route provider-unconfigured 503s, route-level pay-token
+      isolation, stripe-intent concurrency race. Write before
+      declaring the P4 GATE.
+- [x] Deposit auto-invoice on booking (04/05 contract) -- wired into
+      domain/booking/service.py::create_booking; unit/integration
+      tested (deposit * party_size math, invoice_id linkage).
+- [x] Manual payment recording endpoint (admin) -- POST
+      /api/admin/invoices/{id}/manual-payment.
+- [x] melpinoinvoice.cls letterhead w/ business_legal_name --
+      renderer.py wires cfg.invoice_business_name (never a hardcoded
+      name) into the existing .cls; no automated visual-output test
+      exists (see report: only latex_escape logic is easily unit-
+      testable without a real compile-and-inspect harness, which this
+      pass did not build despite latexmk actually being present on this
+      host -- flagged as a gap in the final report).
+- [x] Payment idempotency/tamper/race tests copied + green (webhook
+      replay idempotency, manual-payment row-lock race, refund balance
+      guard, unconfigured-provider Result, amount never client-supplied)
 - [ ] Revisit api/bookings.py + api/courses.py module-level AppConfig
       singleton (blocks per-test config injection; system tests
       monkeypatch module _cfg -- flagged during P3; prefer app.state
-      or a Depends provider)
-- [ ] Fix AppConfig.payment_processor_secret default ("sk_test_fake"
-      makes /api/config report stripe:true when nothing is
-      configured -- flagged during P2; decide None-means-unconfigured
-      semantics like paypal's)
-- [ ] GATE: deposit journey green end-to-end vs fake-stripe
+      or a Depends provider) -- NOT touched this pass; still open.
+- [x] Fix AppConfig.payment_processor_secret default (was "sk_test_fake"
+      making /api/config report stripe:true when nothing was
+      configured; now None-means-unconfigured, matching paypal's
+      convention; fixtures/tests updated to set it explicitly where a
+      configured Stripe is actually needed)
+- [ ] GATE: deposit journey green end-to-end vs fake-stripe (left
+      unticked per instructions -- blocked on the frontend /pay/{token}
+      page another agent owns)
 
 ## P5 -- Waivers + legal surface (docs/design/06)
 

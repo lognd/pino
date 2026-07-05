@@ -260,18 +260,72 @@ async def send_due_reminders(db: "AsyncSession", cfg: "AppConfig") -> int:
 
 
 async def notify_invoice_sent(
-    db: "AsyncSession", cfg: "AppConfig", invoice: "Invoice"
+    db: "AsyncSession",
+    cfg: "AppConfig",
+    invoice: "Invoice",
+    pay_url: str | None,
 ) -> None:
-    """Sends the invoice email with PDF/plaintext/JSON attachments."""
-    raise NotImplementedError(
-        "see docs/design/05-payments-and-invoicing.md"
-    )  # TODO(impl)
+    """Sends the "you have an invoice" email with the pay-by-link URL --
+    see docs/design/05. Best-effort, no ledger (an admin can re-send
+    deliberately)."""
+    if not mailer.is_configured(cfg):
+        return
+    try:
+        student = await db.get(Student, invoice.student_id)
+        if student is None or await _is_opted_out(db, student.email):
+            return
+        subject, html, text = templates.invoice_sent(
+            cfg,
+            invoice_id=invoice.id,
+            amount_total=invoice.amount_total,
+            currency=invoice.currency,
+            due_date=invoice.due_date.isoformat() if invoice.due_date else None,
+            pay_url=pay_url,
+        )
+        await mailer.send_email(
+            cfg,
+            to_email=student.email,
+            to_user_id=student.id,
+            subject=subject,
+            content_html=html,
+            content_text=text,
+        )
+        _log.info("sent invoice-sent email invoice_id=%s", invoice.id)
+    except Exception as exc:
+        _log.error(
+            "failed to send invoice-sent notification",
+            extra={"invoice_id": str(invoice.id)},
+            exc_info=exc,
+        )
 
 
 async def notify_payment_received(
     db: "AsyncSession", cfg: "AppConfig", invoice: "Invoice", amount: Decimal
 ) -> None:
-    """Sends the payment-received email."""
-    raise NotImplementedError(
-        "see docs/design/05-payments-and-invoicing.md"
-    )  # TODO(impl)
+    """Sends the "we received your payment" email -- called from every
+    path that settles a payment (manual, Stripe webhook, PayPal
+    capture)."""
+    if not mailer.is_configured(cfg):
+        return
+    try:
+        student = await db.get(Student, invoice.student_id)
+        if student is None or await _is_opted_out(db, student.email):
+            return
+        subject, html, text = templates.payment_received(
+            cfg, invoice_id=invoice.id, amount=amount, currency=invoice.currency
+        )
+        await mailer.send_email(
+            cfg,
+            to_email=student.email,
+            to_user_id=student.id,
+            subject=subject,
+            content_html=html,
+            content_text=text,
+        )
+        _log.info("sent payment-received email invoice_id=%s", invoice.id)
+    except Exception as exc:
+        _log.error(
+            "failed to send payment-received notification",
+            extra={"invoice_id": str(invoice.id)},
+            exc_info=exc,
+        )

@@ -76,12 +76,18 @@ class BookingCreateRequest(BaseModel):
 
 
 class BookingCreateResponse(BaseModel):
-    """What the confirm step needs: the booking id + its private manage URL."""
+    """What the confirm step needs: the booking id + its private manage
+    URL, plus the deposit invoice's pay link when the course carries a
+    deposit (doc 05: "the confirmation screen embeds that invoice's pay
+    flow")."""
 
     model_config = {}
 
     booking_id: str
     manage_url: str
+    # Both None when the course has no deposit (no invoice was created).
+    pay_url: str | None = None
+    amount_due: str | None = None
 
 
 class BookingDetailResponse(BaseModel):
@@ -98,6 +104,15 @@ class BookingDetailResponse(BaseModel):
     location_name: str
     location_addr: str
     can_cancel_online: bool
+    # Outstanding balance on the linked invoice + its pay link (both None
+    # when there is no linked invoice or nothing is owed). Pay tokens are
+    # STABLE, derived values (see domain/invoices/service.py::
+    # derive_pay_token), so serving the link on a passive GET is safe: it
+    # is the SAME link the invoice email carried, and rendering the manage
+    # page never invalidates anything (doc 05: "a booking's manage page
+    # links straight to its invoice's pay page when a balance is due").
+    pay_url: str | None = None
+    amount_due: str | None = None
 
 
 def _to_input(payload: BookingCreateRequest, session_id: UUID) -> BookingInput:
@@ -142,8 +157,27 @@ async def create_booking_endpoint(
     if result.is_err:
         raise to_http_exception(result.danger_err)
     booking, raw_token = result.danger_ok
+
+    # Deposit course -> the confirmation screen embeds the invoice's pay
+    # flow (doc 05). The pay link is the invoice's one stable link (see
+    # derive_pay_token) -- the same URL the confirmation email carries.
+    pay_url: str | None = None
+    amount_due_str: str | None = None
+    if booking.invoice_id is not None:
+        from melpino_backend.db.models.invoices import Invoice
+        from melpino_backend.domain.invoices import service as invoice_service
+
+        invoice = await db.get(Invoice, booking.invoice_id)
+        if invoice is not None:
+            amount_due = await invoice_service.get_amount_due(db, invoice)
+            pay_url = await invoice_service.pay_link_for_invoice(db, _cfg, invoice)
+            amount_due_str = str(amount_due)
+
     return BookingCreateResponse(
-        booking_id=str(booking.id), manage_url=manage_url_for(_cfg, raw_token)
+        booking_id=str(booking.id),
+        manage_url=manage_url_for(_cfg, raw_token),
+        pay_url=pay_url,
+        amount_due=amount_due_str,
     ).model_dump()
 
 
@@ -187,6 +221,25 @@ async def get_booking_by_token_endpoint(
     can_cancel = booking.status == "confirmed" and within_cancellation_window(
         session.starts_at, now, _cfg.booking_cancellation_hours
     )
+
+    # Read-only balance surface. Serving pay_url here is safe precisely
+    # because pay tokens are stable derived values, never rotated by a
+    # read -- see BookingDetailResponse's own field comment.
+    pay_url: str | None = None
+    amount_due_str: str | None = None
+    if booking.invoice_id is not None:
+        from melpino_backend.db.models.invoices import Invoice
+        from melpino_backend.domain.invoices import service as invoice_service
+
+        invoice = await db.get(Invoice, booking.invoice_id)
+        if invoice is not None and invoice.status in ("sent", "overdue"):
+            amount_due = await invoice_service.get_amount_due(db, invoice)
+            if amount_due > 0:
+                pay_url = await invoice_service.pay_link_for_invoice(
+                    db, _cfg, invoice
+                )
+                amount_due_str = str(amount_due)
+
     return BookingDetailResponse(
         booking_id=str(booking.id),
         status=booking.status,
@@ -197,6 +250,8 @@ async def get_booking_by_token_endpoint(
         location_name=session.location_name,
         location_addr=session.location_addr,
         can_cancel_online=can_cancel,
+        pay_url=pay_url,
+        amount_due=amount_due_str,
     ).model_dump()
 
 

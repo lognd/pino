@@ -125,15 +125,51 @@ def invoice_sent(
     pay_url: str | None = None,
 ) -> tuple[str, str, str]:
     """Returns (subject, content_html, content_text) for a new invoice."""
-    raise NotImplementedError(
-        "see docs/design/05-payments-and-invoicing.md"
-    )  # TODO(impl)
+    business = html_escape(cfg.business_short_name)
+    amount_str = html_escape(f"{amount_total} {currency.upper()}")
+    subject = f"Invoice from {cfg.business_short_name}"
+    due_html = (
+        f'<p class="ln-muted" style="margin:0 0 12px; font-size:12px; '
+        f'color:{_MUTED_COLOR};">Due: {html_escape(due_date)}</p>'
+        if due_date
+        else ""
+    )
+    due_text = f"Due: {due_date}\n" if due_date else ""
+    cta_html = (
+        f'<p style="margin:0 0 12px;">{_cta(pay_url, "pay-invoice")}</p>'
+        if pay_url
+        else ""
+    )
+    cta_text = f"Pay online: {pay_url}\n\n" if pay_url else ""
+    html = (
+        f'<p style="margin:0 0 12px;">{business} has sent you an invoice for '
+        f"<strong>{amount_str}</strong>.</p>"
+        f"{due_html}{cta_html}"
+        f'<p class="ln-muted" style="margin:0; font-size:12px; '
+        f'color:{_MUTED_COLOR};">Invoice reference: {invoice_id}</p>'
+    )
+    text = (
+        f"{cfg.business_short_name} has sent you an invoice for {amount_str}.\n\n"
+        f"{due_text}{cta_text}"
+        f"Invoice reference: {invoice_id}\n"
+    )
+    return subject, html, text
 
 
 def payment_received(
     cfg: "AppConfig", *, invoice_id: UUID, amount: Decimal, currency: str
 ) -> tuple[str, str, str]:
     """Returns (subject, content_html, content_text) for a settled payment."""
-    raise NotImplementedError(
-        "see docs/design/05-payments-and-invoicing.md"
-    )  # TODO(impl)
+    amount_str = html_escape(f"{amount} {currency.upper()}")
+    subject = f"Payment received -- {cfg.business_short_name}"
+    html = (
+        f'<p style="margin:0 0 12px;">Thank you -- we have received your '
+        f"payment of <strong>{amount_str}</strong>.</p>"
+        f'<p class="ln-muted" style="margin:0; font-size:12px; '
+        f'color:{_MUTED_COLOR};">Invoice reference: {invoice_id}</p>'
+    )
+    text = (
+        f"Thank you -- we have received your payment of {amount_str}.\n\n"
+        f"Invoice reference: {invoice_id}\n"
+    )
+    return subject, html, text

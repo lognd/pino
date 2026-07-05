@@ -18,12 +18,15 @@ def _build_app() -> FastAPI:
 
 
 async def test_get_public_config_full_shape(monkeypatch) -> None:
-    """Every payment method configured -> all reported True/non-null."""
+    """Every payment method configured -> all reported True/non-null.
+    PAYMENT_PROCESSOR_SECRET must be set explicitly here -- AppConfig's
+    own default is None/unconfigured (see app/config.py)."""
     monkeypatch.setenv("BUSINESS_LEGAL_NAME", "Test Co, LLC")
     monkeypatch.setenv("BUSINESS_SHORT_NAME", "Test Co")
     monkeypatch.setenv("ZELLE_HANDLE", "test@zelle.example")
     monkeypatch.setenv("PAYPAL_CLIENT_ID", "client-id")
     monkeypatch.setenv("PAYPAL_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("PAYMENT_PROCESSOR_SECRET", "sk_test_fake")
 
     app = _build_app()
     transport = ASGITransport(app=app)
@@ -59,3 +62,20 @@ async def test_get_public_config_paypal_and_zelle_unconfigured(monkeypatch) -> N
     body = resp.json()
     assert body["payment_methods"]["paypal"] is False
     assert body["payment_methods"]["zelle_handle"] is None
+
+
+async def test_get_public_config_stripe_unconfigured_by_default(monkeypatch) -> None:
+    """PAYMENT_PROCESSOR_SECRET unset -> stripe reported False -- AppConfig's
+    default is None/unconfigured (see app/config.py), not a fake secret
+    that would make an unconfigured deployment look stripe-ready."""
+    monkeypatch.setenv("BUSINESS_LEGAL_NAME", "Test Co, LLC")
+    monkeypatch.setenv("BUSINESS_SHORT_NAME", "Test Co")
+    monkeypatch.delenv("PAYMENT_PROCESSOR_SECRET", raising=False)
+
+    app = _build_app()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/config")
+
+    assert resp.status_code == 200
+    assert resp.json()["payment_methods"]["stripe"] is False

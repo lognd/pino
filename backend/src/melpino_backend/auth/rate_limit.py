@@ -16,6 +16,12 @@ logger = logging.getLogger(__name__)
 LOGIN = (5, 15 * 60)
 BOOKING_CREATE = (5, 60 * 60)
 BOOKING_MANAGE_LOOKUP = (30, 60 * 60)
+# FINDINGS.md L3: resend_confirmation shares BOOKING_MANAGE_LOOKUP's
+# generous 30/hour by default, which lets anyone holding a manage token
+# fire 30 real emails/hour at the booker. Its own tighter bucket bounds
+# that nuisance/mail-quota amplification without affecting the other
+# manage-token lookups (get_booking_by_token, cancel_booking_by_token).
+BOOKING_RESEND = (3, 60 * 60)
 PAYMENT = (20, 60)
 PUBLIC_READ = (120, 60)
 ADMIN = (300, 60)

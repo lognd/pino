@@ -20,6 +20,7 @@ from melpino_backend.app.config import AppConfig
 from melpino_backend.auth.rate_limit import (
     BOOKING_CREATE,
     BOOKING_MANAGE_LOOKUP,
+    BOOKING_RESEND,
     rate_limit,
 )
 from melpino_backend.db.base import get_db
@@ -54,6 +55,10 @@ _rl_create = rate_limit("booking_create", *BOOKING_CREATE, redis_url=_cfg.redis_
 _rl_manage = rate_limit(
     "booking_manage", *BOOKING_MANAGE_LOOKUP, redis_url=_cfg.redis_url
 )
+# FINDINGS.md L3: resend gets its own tighter bucket (separate from the
+# 30/hour manage-lookup bucket above) since it fires a real email per
+# call rather than just reading state.
+_rl_resend = rate_limit("booking_resend", *BOOKING_RESEND, redis_url=_cfg.redis_url)
 
 
 class AttestationInput(BaseModel):
@@ -329,7 +334,7 @@ async def cancel_booking_by_token_endpoint(
 async def resend_confirmation_endpoint(
     token: str,
     db: AsyncSession = Depends(get_db),
-    _rl: None = Depends(_rl_manage),
+    _rl: None = Depends(_rl_resend),
 ) -> dict:
     """POST /api/bookings/manage/{token}/resend-confirmation."""
     result = await resend_confirmation(db, _cfg, token)

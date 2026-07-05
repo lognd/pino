@@ -96,7 +96,10 @@ async def test_waiver_download_never_exposes_a_public_url(
         storage,
         student_id=student.id,
         content_type="image/png",
-        data=b"png-bytes",
+        # FINDINGS.md L2: upload_waiver now sniffs magic bytes against the
+        # declared content_type, so this must be real (if minimal) PNG
+        # bytes rather than an arbitrary label-content mismatch.
+        data=b"\x89PNG\r\n\x1a\n" + b"fake-png-body",
     )
     assert result.is_ok
     waiver = result.danger_ok

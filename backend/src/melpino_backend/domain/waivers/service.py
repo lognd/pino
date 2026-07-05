@@ -36,6 +36,27 @@ _ALLOWED_CONTENT_TYPES = {
 CURRENT_TEMPLATE_VERSION = "v1"
 
 
+def _sniffed_content_type(data: bytes) -> str | None:
+    """Identifies one of the allowlisted content types from leading magic
+    bytes, or None if the actual bytes don't match any of them.
+
+    FINDINGS.md L2: the browser-supplied Content-Type header is not
+    evidence of what the bytes actually are -- upload_waiver below must
+    check this against the client-declared value, not just against the
+    allowlist's keys, or the "allowlisted content types only" guard
+    validates a string an uploader fully controls while doing nothing to
+    the bytes themselves."""
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data.startswith(b"%PDF-"):
+        return "application/pdf"
+    return None
+
+
 async def upload_waiver(
     db: "AsyncSession",
     storage: "StorageBackend",
@@ -54,6 +75,11 @@ async def upload_waiver(
 
     ext = _ALLOWED_CONTENT_TYPES.get(content_type)
     if ext is None:
+        return Err(WaiverError.UnsupportedContentType)
+    # FINDINGS.md L2: the declared content_type must also match what the
+    # bytes actually are -- otherwise the allowlist only constrains a
+    # client-controlled label, not the uploaded content.
+    if _sniffed_content_type(data) != content_type:
         return Err(WaiverError.UnsupportedContentType)
 
     waiver_id = uuid4()

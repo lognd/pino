@@ -100,12 +100,28 @@ async def lock_invoice_for_update(
     invoice operation locks the row first, serializing two concurrent
     requests against the SAME invoice (a double-clicked pay button, a
     retried webhook overlapping an admin's manual-payment recording)
-    without taking any lock on OTHER invoices."""
+    without taking any lock on OTHER invoices.
+
+    populate_existing=True is REQUIRED here, not cosmetic: a caller that
+    already loaded this same invoice earlier in the SAME session (e.g.
+    api/invoices_public.py's _resolve_invoice, an unlocked read) leaves it
+    in the session's identity map. Without populate_existing, SQLAlchemy
+    returns that already-identity-mapped Python object's EXISTING
+    (pre-lock) attribute values rather than the row this FOR UPDATE just
+    (re-)fetched after waiting out a concurrent holder's commit -- found
+    via a concurrency test that reproduced two simultaneous
+    /stripe-intent creations both reading stripe_payment_intent_id=None
+    and both creating a fresh Stripe PaymentIntent, exactly the
+    double-charge this lock exists to prevent. See TODO.md's P4 test
+    gaps and tests/integration/test_payments_p4_gaps.py."""
     from melpino_backend.db.models.invoices import Invoice
 
     return (
         await db.execute(
-            select(Invoice).where(Invoice.id == invoice_id).with_for_update()
+            select(Invoice)
+            .where(Invoice.id == invoice_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
     ).scalar_one_or_none()
 

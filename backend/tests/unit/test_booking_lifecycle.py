@@ -243,3 +243,27 @@ async def test_honeypot_field_filled_rejects_silently(
 
     rows = (await db_session.execute(select(Booking))).scalars().all()
     assert len(rows) == 0
+
+
+async def test_booking_rejected_without_attestation(
+    db_session: AsyncSession, app_config: AppConfig, make_class_session: Any
+) -> None:
+    """create_booking with attestation_accepted=False returns
+    AttestationRequired and creates no row -- see docs/design/06-waivers-
+    and-legal.md's attestation-versioning-on-bookings section."""
+    from melpino_backend.domain.booking.service import create_booking
+
+    session = await make_class_session(status="published")
+    payload = BookingInput(
+        session_id=session.id,
+        full_name="No Attestation",
+        email="no-attestation@example.test",
+        attestation_accepted=False,
+        attestation_version="v1",
+    )
+    result = await create_booking(db_session, app_config, payload)
+    assert result.is_err
+    assert result.danger_err is BookingError.AttestationRequired
+
+    rows = (await db_session.execute(select(Booking))).scalars().all()
+    assert len(rows) == 0

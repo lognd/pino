@@ -95,12 +95,28 @@ implementing; docs win over guesses.
       rotation = global revocation w/ re-key heal), GET/POST
       /api/pay/{token}/... surface, CSRF-exempt. Frontend /pay page
       NOT built yet (separate frontend task).
-- [ ] P4 test gaps (agent interrupted; suite otherwise green 61+14):
-      PDF renderer unit tests (LaTeX-escape chokepoint; latexmk IS
-      present on this host, compiles a real PDF), refund-replay,
-      per-route provider-unconfigured 503s, route-level pay-token
-      isolation, stripe-intent concurrency race. Write before
-      declaring the P4 GATE.
+- [x] P4 test gaps closed (suite now green 126 unit/integration+system
+      passed, 4 skipped -- was 61+14): PDF renderer unit tests
+      (tests/unit/test_invoice_pdf.py -- LaTeX-escape chokepoint on
+      hostile memo/bill_to/line-item/business_details strings) +
+      real-compile system test (tests/system/test_invoice_pdf_generation.py,
+      latexmk present on this host, shutil.which skip convention kept);
+      refund-replay idempotency (same client_request_id replayed twice
+      -> one Refund row; mismatched payment_id on replay -> rejected);
+      per-route provider-unconfigured 503s (stripe-intent + paypal-order
+      routes called directly with None config -> 503, monkeypatching the
+      module-level _cfg singleton per its own documented test
+      convention); route-level pay-token isolation (token A only ever
+      resolves invoice A; a token forged from a different secret 404s);
+      stripe-intent concurrency race -- found and FIXED a real bug in
+      the process: domain/invoices/service.py::lock_invoice_for_update
+      was missing execution_options(populate_existing=True), so a
+      caller that had already loaded the invoice earlier in the same
+      session (api/invoices_public.py's _resolve_invoice) got back its
+      OWN stale pre-lock Python object instead of the fresh row the FOR
+      UPDATE had just waited on, and two concurrent /stripe-intent calls
+      could both create a real Stripe PaymentIntent (a genuine
+      double-charge risk). See tests/integration/test_payments_p4_gaps.py.
 - [x] Deposit auto-invoice on booking (04/05 contract) -- wired into
       domain/booking/service.py::create_booking; unit/integration
       tested (deposit * party_size math, invoice_id linkage).
@@ -131,12 +147,12 @@ implementing; docs win over guesses.
 
 ## P5 -- Waivers + legal surface (docs/design/06)
 
-- [ ] domain/storage (copy + namespace-privacy guard) + moto tests
-- [ ] domain/waivers + api/waivers upload/list/stream
+- [x] domain/storage (copy + namespace-privacy guard) + moto tests
+- [x] domain/waivers + api/waivers upload/list/stream
 - [ ] Legal pages content pass; attestation text versioned; consent
       capture wired. HUMAN INPUT: resolve every VERIFY item in 06
       with Mel/counsel before real bookings.
-- [ ] GATE: privacy guard test + waiver round-trip green
+- [x] GATE: privacy guard test + waiver round-trip green
 
 ## P6 -- Admin mockup (docs/design/14; anytime after P1)
 

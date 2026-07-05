@@ -14,6 +14,10 @@ from melpino_backend.logging.logger import log_dir
 router = APIRouter(prefix="/api/admin/logs", tags=["admin-logs"])
 
 _LIVE_FILE = "app.log"
+# Bounded tail window for tail_live_log -- large enough to comfortably
+# hold the requested line count (up to 2000, well under 1 MB of typical
+# JSON log lines) without ever loading a multi-hundred-MB live file whole.
+_TAIL_WINDOW_BYTES = 1024 * 1024
 
 
 def _safe_log_path(name: str) -> None:
@@ -55,12 +59,27 @@ async def tail_live_log(
     _admin: SessionInfo = Depends(require_staff),
 ) -> list[str]:
     """The most recent N lines of the LIVE log file -- "what just
-    happened," without downloading the whole thing."""
+    happened," without downloading the whole thing.
+
+    Seeks to a bounded tail window instead of reading the whole file --
+    the live file grows unbounded between rotations, so reading it whole
+    on every call (as the docstring's promise implies this endpoint does
+    NOT do) would spike memory/latency under heavy logging."""
     lines = max(1, min(lines, 2000))
     path = log_dir() / _LIVE_FILE
     if not path.exists():
         return []
-    all_lines = path.read_text(errors="replace").splitlines()
+    with path.open("rb") as f:
+        f.seek(0, 2)
+        size = f.tell()
+        f.seek(max(0, size - _TAIL_WINDOW_BYTES))
+        chunk = f.read()
+    text = chunk.decode("utf-8", errors="replace")
+    all_lines = text.splitlines()
+    # The seek may have landed mid-line -- drop the (possibly partial)
+    # first line unless we read from the true start of the file.
+    if size > _TAIL_WINDOW_BYTES and all_lines:
+        all_lines = all_lines[1:]
     return all_lines[-lines:]
 
 

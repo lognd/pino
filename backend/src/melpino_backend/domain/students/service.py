@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from typani.result import Err, Ok, Result
 
 from melpino_backend.db.models.students import Student
@@ -37,9 +38,29 @@ async def find_or_create_student(
             existing.phone = phone
         return existing
 
-    student = Student(full_name=full_name.strip(), email=email.strip(), phone=phone)
-    db.add(student)
-    await db.flush()
+    # The SELECT above can miss a concurrent insert of the SAME new
+    # person (different session, no shared row lock -- see FINDINGS.md
+    # L2). The uq_students_lower_email_lower_full_name unique index is
+    # the backstop; a SAVEPOINT keeps a loser's IntegrityError from
+    # poisoning the caller's transaction, and we re-select the winner's
+    # row instead of erroring out.
+    try:
+        async with db.begin_nested():
+            student = Student(
+                full_name=full_name.strip(), email=email.strip(), phone=phone
+            )
+            db.add(student)
+            await db.flush()
+    except IntegrityError:
+        logger.info(
+            "student dedup race: concurrent insert won, re-selecting for email=%s",
+            email.strip().lower(),
+        )
+        winner = (await db.execute(stmt)).scalars().first()
+        if winner is None:  # pragma: no cover - defensive, should be unreachable
+            raise
+        return winner
+
     logger.info("student dedup miss: created student_id=%s", student.id)
     return student
 

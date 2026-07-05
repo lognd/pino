@@ -27,6 +27,18 @@ class Student(Base):
         # Dedup lookup -- see docs/design/03's "Indexes worth declaring
         # up front".
         Index("ix_students_lower_email", text("lower(email)")),
+        # Enforces the dedup key at the schema level so two concurrent
+        # find_or_create_student calls for the SAME new person (different
+        # sessions booked in parallel tabs, no shared row lock) cannot
+        # both slip past the SELECT and insert duplicate rows -- see
+        # FINDINGS.md L2. The service catches the resulting IntegrityError
+        # and re-selects the winner's row.
+        Index(
+            "uq_students_lower_email_lower_full_name",
+            text("lower(email)"),
+            text("lower(full_name)"),
+            unique=True,
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

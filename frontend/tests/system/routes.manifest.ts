@@ -11,12 +11,13 @@
 // entry-server.tsx returns [] for those on purpose).
 export interface ManifestRoute {
   path: string;
-  jsonLd: "LocalBusiness" | "Course" | "none";
+  jsonLd: "LocalBusiness" | "Course" | "ImageGallery" | "none";
 }
 
 export const PUBLIC_ROUTES: ManifestRoute[] = [
   { path: "/", jsonLd: "LocalBusiness" },
   { path: "/courses", jsonLd: "Course" },
+  { path: "/gallery", jsonLd: "ImageGallery" },
   { path: "/about", jsonLd: "none" },
   { path: "/contact", jsonLd: "LocalBusiness" },
   { path: "/book", jsonLd: "none" },

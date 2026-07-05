@@ -57,6 +57,7 @@ export interface Content {
   meta: {
     landing: RouteMeta;
     courses: RouteMeta;
+    gallery: RouteMeta;
     about: RouteMeta;
     contact: RouteMeta;
     book: RouteMeta;
@@ -65,6 +66,7 @@ export interface Content {
   nav: {
     home: NavEntry;
     courses: NavEntry;
+    gallery: NavEntry;
     about: NavEntry;
     contact: NavEntry;
     book: NavEntry;
@@ -229,6 +231,12 @@ export const CONTENT: Content = {
         "SAMPLE -- Concealed-carry certification, group technique classes, " +
         "and private 1:1 instruction in Clearwater, Florida.",
     },
+    gallery: {
+      title: `Gallery -- ${businessShortName}`,
+      description:
+        "SAMPLE -- Photos and video from the classroom and the range in " +
+        "Clearwater, Florida.",
+    },
     about: {
       title: `About -- ${businessShortName}`,
       description:
@@ -262,6 +270,7 @@ export const CONTENT: Content = {
   nav: {
     home: { label: "Home", path: "/" },
     courses: { label: "Courses", path: "/courses" },
+    gallery: { label: "Gallery", path: "/gallery" },
     about: { label: "About", path: "/about" },
     contact: { label: "Contact", path: "/contact" },
     book: { label: "Book a class", path: "/book" },

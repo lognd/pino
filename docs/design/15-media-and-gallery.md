@@ -87,6 +87,11 @@ one file.
   presentable; a dev-only `/carousel-lab` route (like /hero-lab)
   renders all variants with the SAMPLE media so a human picks. The
   chosen default ships on Landing/Gallery; alternates remain.
+  - **Shipped default: `edge-peek`** (pending a human confirmation pass
+    in /carousel-lab). It best communicates "there is more" without
+    dots-only navigation while keeping the big labeled controls and the
+    skewed N-of-M counter chip. `full-bleed` and `filmstrip` remain
+    available behind the `variant` prop.
 
 ## Gallery page (`/gallery`)
 

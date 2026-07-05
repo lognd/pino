@@ -20,7 +20,8 @@ import { StaticRouter } from "react-router-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
 import { CONTENT } from "./content/mock";
-import { buildLocalBusinessJsonLd, buildCourseJsonLd } from "./lib/jsonld";
+import { buildLocalBusinessJsonLd, buildCourseJsonLd, buildImageGalleryJsonLd } from "./lib/jsonld";
+import { MEDIA } from "./content/media";
 import { publicRoutes, type PublicRouteMeta } from "./lib/routes";
 
 export { publicRoutes };
@@ -53,6 +54,9 @@ export function routeJsonLd(path: string): object[] {
   }
   if (path === "/courses") {
     return CONTENT.courses.map(buildCourseJsonLd);
+  }
+  if (path === "/gallery") {
+    return [buildImageGalleryJsonLd(MEDIA, CONTENT.meta.gallery.title)];
   }
   const courseMatch = /^\/courses\/(.+)$/.exec(path);
   if (courseMatch) {

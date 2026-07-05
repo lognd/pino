@@ -11,6 +11,7 @@
 
 import { businessLegalName } from "./brand";
 import type { Content, CourseEntry } from "../content/mock";
+import type { MediaItem } from "../content/media";
 
 export interface PostalAddressJsonLd {
   "@type": "PostalAddress";
@@ -39,6 +40,41 @@ export interface CourseJsonLd {
   description: string;
   provider: { "@type": "Organization"; name: string };
   offers: OfferJsonLd;
+}
+
+export interface ImageObjectJsonLd {
+  "@type": "ImageObject";
+  contentUrl: string;
+  name: string;
+}
+
+export interface ImageGalleryJsonLd {
+  "@context": "https://schema.org";
+  "@type": "ImageGallery";
+  name: string;
+  image: ImageObjectJsonLd[];
+}
+
+/** ImageGallery entry for the /gallery page (doc 15) -- one ImageObject per
+ * IMAGE manifest item (videos are excluded; ImageGallery.image is images).
+ * contentUrl/name come straight from the media manifest's src/alt (SAMPLE
+ * values as shipped, per content/media.ts's own SAMPLE convention). */
+export function buildImageGalleryJsonLd(
+  items: readonly MediaItem[],
+  name: string,
+): ImageGalleryJsonLd {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ImageGallery",
+    name,
+    image: items
+      .filter((item) => item.kind === "image")
+      .map((item) => ({
+        "@type": "ImageObject",
+        contentUrl: item.src,
+        name: item.alt,
+      })),
+  };
 }
 
 /** LocalBusiness entry for Landing/Contact -- name from brand.ts, contact

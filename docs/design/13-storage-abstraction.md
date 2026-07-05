@@ -40,7 +40,7 @@ brand/hero/*                                -- public: the future real
 
 Private vs public is a property of the NAMESPACE, not per-call
 judgment: `r2_public_base_url` handling must check the key prefix
-against the allowlist above (`course-media/`, `brand/`) and return
+against the allowlist above (`course-media/`, `brand/`, `gallery/`) and return
 None for everything else even when a public base is configured --
 this is a one-function guard in `factory.py`/`r2.py` plus a unit
 test, and it is the one behavioral addition to logand's copied code.

@@ -5,7 +5,7 @@
 // content/mock.ts; business name from lib/brand.ts.
 
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { businessLegalName, businessShortName } from "../../lib/brand";
 import { CONTENT } from "../../content/mock";
 import { useBulletholeClicks } from "../../hero/useBulletholeClicks";
@@ -19,6 +19,11 @@ export function Shell({ children }: { children: ReactNode }) {
   // (docs/design/08 Revision 2): pointer-events-none portal, no-op under
   // reduced motion, never delays navigation. Overlay rendered once below.
   const { overlay, bulletProps } = useBulletholeClicks();
+  // Backlink-home rule (doc 09, REVISED round 3): the home affordance is the
+  // MEL PINO wordmark logo at the VERY LEFT, shown on every page EXCEPT the
+  // landing route (where the hero already owns the lockup -- no duplicate
+  // logo in the bar there). The plain-text "Home" nav item is removed.
+  const onLanding = useLocation().pathname === CONTENT.nav.home.path;
   return (
     <div className="flex min-h-screen flex-col bg-mp-black text-mp-white">
       <header className="border-b-2 border-mp-border px-4 py-4">
@@ -26,19 +31,18 @@ export function Shell({ children }: { children: ReactNode }) {
           aria-label="Primary"
           className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4"
         >
-          <Link to="/" className="flex items-center gap-2">
-            <img src="/brand/wordmark.svg" alt="" className="h-10 w-auto" />
-            <span className="sr-only">{businessShortName} -- home</span>
-          </Link>
+          {/* Wordmark-logo home link -- shown on every page except landing
+              (doc 09's revised backlink rule). A spacer keeps the nav links
+              right-aligned on landing where the logo is absent. */}
+          {onLanding ? (
+            <span aria-hidden="true" />
+          ) : (
+            <Link to={CONTENT.nav.home.path} className="flex items-center gap-2" {...bulletProps}>
+              <img src="/brand/wordmark.svg" alt="" className="h-10 w-auto" />
+              <span className="sr-only">{businessShortName} -- home</span>
+            </Link>
+          )}
           <ul className="flex flex-wrap items-center gap-6">
-            <li>
-              {/* Explicit plain-text Home backlink -- first nav item, doc 09's
-                  binding backlink-home rule (the wordmark logo alone is not
-                  enough for this audience). */}
-              <Link to={CONTENT.nav.home.path} className={NAV_LINK} {...bulletProps}>
-                {CONTENT.nav.home.label}
-              </Link>
-            </li>
             <li>
               <Link
                 to={CONTENT.nav.courses.path}
@@ -46,6 +50,15 @@ export function Shell({ children }: { children: ReactNode }) {
                 {...bulletProps}
               >
                 {CONTENT.nav.courses.label}
+              </Link>
+            </li>
+            <li>
+              <Link
+                to={CONTENT.nav.gallery.path}
+                className={NAV_LINK}
+                {...bulletProps}
+              >
+                {CONTENT.nav.gallery.label}
               </Link>
             </li>
             <li>

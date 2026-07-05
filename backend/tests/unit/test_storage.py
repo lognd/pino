@@ -122,6 +122,15 @@ async def test_r2_url_uses_public_base_url_for_brand(
     )
 
 
+async def test_r2_url_uses_public_base_url_for_gallery(
+    r2_storage: CloudflareR2Storage,
+) -> None:
+    assert (
+        await r2_storage.url("gallery/sample-range-01.svg")
+        == "https://files.example.com/gallery/sample-range-01.svg"
+    )
+
+
 async def test_r2_url_none_without_public_base_url() -> None:
     with mock_aws():
         storage = CloudflareR2Storage(
@@ -167,6 +176,7 @@ async def test_r2_url_is_none_for_unlisted_namespace(
 def test_is_public_key_allowlist() -> None:
     assert is_public_key("course-media/foo.jpg") is True
     assert is_public_key("brand/hero/poster.jpg") is True
+    assert is_public_key("gallery/sample-range-01.svg") is True
     assert is_public_key("waivers/1/2.pdf") is False
     assert is_public_key("payment-proofs/1/2.png") is False
     assert is_public_key("") is False

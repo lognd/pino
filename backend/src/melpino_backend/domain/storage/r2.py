@@ -23,7 +23,7 @@ _log = get_logger(__name__)
 # payment-proofs/ (and anything else not on this list) must always proxy
 # through the app's own authenticated API instead. Add new public
 # namespaces here first (doc 13's namespace list is the source of truth).
-_PUBLIC_KEY_PREFIXES = ("course-media/", "brand/")
+_PUBLIC_KEY_PREFIXES = ("course-media/", "brand/", "gallery/")
 
 
 def is_public_key(key: str) -> bool:

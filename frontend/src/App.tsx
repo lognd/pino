@@ -12,10 +12,16 @@ import { Shell } from "./app/layout/Shell";
 const HeroLab = lazy(() =>
   import("./hero/HeroLab").then((m) => ({ default: m.HeroLab })),
 );
+// Dev-gated + lazy, like HeroLab -- /carousel-lab never enters the
+// production bundle or route table (docs/design/15-media-and-gallery.md).
+const CarouselLab = lazy(() =>
+  import("./dev/CarouselLab").then((m) => ({ default: m.CarouselLab })),
+);
 import { AdminGuard } from "./app/layout/AdminGuard";
 import { Landing } from "./app/routes/public/Landing";
 import { Courses } from "./app/routes/public/Courses";
 import { CourseDetail } from "./app/routes/public/CourseDetail";
+import { Gallery } from "./app/routes/public/Gallery";
 import { About } from "./app/routes/public/About";
 import { Contact } from "./app/routes/public/Contact";
 import { Book } from "./app/routes/public/Book";
@@ -39,6 +45,7 @@ export function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/courses" element={<Courses />} />
         <Route path="/courses/:slug" element={<CourseDetail />} />
+        <Route path="/gallery" element={<Gallery />} />
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/book" element={<Book />} />
@@ -52,6 +59,17 @@ export function App() {
             element={
               <Suspense fallback={null}>
                 <HeroLab />
+              </Suspense>
+            }
+          />
+        )}
+
+        {import.meta.env.DEV && (
+          <Route
+            path="/carousel-lab"
+            element={
+              <Suspense fallback={null}>
+                <CarouselLab />
               </Suspense>
             }
           />

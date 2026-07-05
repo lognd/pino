@@ -21,6 +21,7 @@ export function publicRoutes(): PublicRouteMeta[] {
   const routes: PublicRouteMeta[] = [
     { path: "/", title: CONTENT.meta.landing.title, description: CONTENT.meta.landing.description },
     { path: "/courses", title: CONTENT.meta.courses.title, description: CONTENT.meta.courses.description },
+    { path: "/gallery", title: CONTENT.meta.gallery.title, description: CONTENT.meta.gallery.description },
     { path: "/about", title: CONTENT.meta.about.title, description: CONTENT.meta.about.description },
     { path: "/contact", title: CONTENT.meta.contact.title, description: CONTENT.meta.contact.description },
     { path: "/book", title: CONTENT.meta.book.title, description: CONTENT.meta.book.description },

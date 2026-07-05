@@ -16,6 +16,8 @@ import { businessShortName } from "../../../lib/brand";
 import { CONTENT } from "../../../content/mock";
 import { usePageMeta } from "../../layout/PageMeta";
 import { buildLocalBusinessJsonLd } from "../../../lib/jsonld";
+import { RANGE_STRIP_MEDIA, MEDIA_COPY } from "../../../content/media";
+import { LazyMedia } from "../../../components/LazyMedia";
 
 // Named export -> default via .then(), so this works whether or not
 // src/hero/Hero.tsx ever grows a default export of its own.
@@ -121,6 +123,34 @@ export function Landing() {
             </li>
           ))}
         </ul>
+      </section>
+
+      {/* "From the range" strip -- a small additive teaser (3 images) linking
+          to the full gallery (doc 15). Images only, so Landing never mounts a
+          player; each is a layout-stable LazyMedia box. */}
+      <section aria-labelledby="range-strip-heading" className="mx-auto max-w-6xl px-4 py-16 sm:py-20">
+        <h2
+          id="range-strip-heading"
+          className="font-display text-3xl font-extrabold italic uppercase text-mp-white sm:text-4xl"
+        >
+          {MEDIA_COPY.landingStrip.heading}
+        </h2>
+        <ul className="mt-8 grid gap-6 sm:grid-cols-3">
+          {RANGE_STRIP_MEDIA.map((item, i) => (
+            <li key={`${item.src}-${i}`} className="flex flex-col">
+              <LazyMedia src={item.thumb} alt={item.alt} aspect={item.aspect} />
+              {item.caption && <p className="mt-2 text-lg text-mp-white">{item.caption}</p>}
+            </li>
+          ))}
+        </ul>
+        <div className="mt-8">
+          <Link
+            to="/gallery"
+            className="inline-block text-lg font-semibold text-mp-red-text underline underline-offset-4"
+          >
+            {MEDIA_COPY.landingStrip.linkLabel}
+          </Link>
+        </div>
       </section>
 
       {/* Full-bleed red CTA band with the same diagonal cut. Secondary-styled

@@ -75,6 +75,13 @@ export const BREAK_TARGET = Math.min(1, SHOT_MOMENT + 0.06);
 const LOW_FPS_THRESHOLD = 30;
 const LOW_FPS_SECONDS_TO_TRIP = 2;
 
+/** A single frame gap longer than this is a SUSPENSION (hidden tab, alt-tab,
+ * frozen dev server), not slowness: rAF simply was not running. Such gaps
+ * must not count toward the low-fps trip -- they latched the hero onto the
+ * poster ("it sometimes breaks") on machines that render 60fps fine. The
+ * fps window restarts fresh after the gap. */
+export const SUSPEND_GAP_MS = 1000;
+
 export type ScrubMode = "active" | "settle" | "breaking" | "touch";
 
 export interface ScrubMachineState {
@@ -194,14 +201,20 @@ export function step(state: ScrubMachineState, input: ScrubInput): ScrubMachineS
   const next: ScrubMachineState = { ...state };
 
   // --- fps windowing (independent of scrub mode) ---
-  next.fpsWindowMs = state.fpsWindowMs + dt;
-  next.fpsWindowFrames = state.fpsWindowFrames + 1;
-  if (next.fpsWindowMs >= 1000) {
-    next.fps = (next.fpsWindowFrames * 1000) / next.fpsWindowMs;
-    next.lowFpsSeconds = next.fps < LOW_FPS_THRESHOLD ? state.lowFpsSeconds + 1 : 0;
-    if (next.lowFpsSeconds >= LOW_FPS_SECONDS_TO_TRIP) next.belowThreshold = true;
+  if (dt > SUSPEND_GAP_MS) {
+    // Suspension gap: discard the window; measure fresh from the next tick.
     next.fpsWindowMs = 0;
     next.fpsWindowFrames = 0;
+  } else {
+    next.fpsWindowMs = state.fpsWindowMs + dt;
+    next.fpsWindowFrames = state.fpsWindowFrames + 1;
+    if (next.fpsWindowMs >= 1000) {
+      next.fps = (next.fpsWindowFrames * 1000) / next.fpsWindowMs;
+      next.lowFpsSeconds = next.fps < LOW_FPS_THRESHOLD ? state.lowFpsSeconds + 1 : 0;
+      if (next.lowFpsSeconds >= LOW_FPS_SECONDS_TO_TRIP) next.belowThreshold = true;
+      next.fpsWindowMs = 0;
+      next.fpsWindowFrames = 0;
+    }
   }
 
   // --- movement energy: EMA of instantaneous pointer speed (diagonals/sec) ---

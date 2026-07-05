@@ -169,3 +169,28 @@ describe("hero/scrubMachine.ts fps guard", () => {
     expect(s.belowThreshold).toBe(false);
   });
 });
+
+// Regression for "it sometimes breaks": a hidden/suspended tab pauses rAF, so
+// the first tick after resume carries a giant dtMs. The old fps windowing
+// counted that as a sub-30fps second; two of them latched belowThreshold and
+// the hero silently dropped to the poster forever on machines that render
+// 60fps fine. Suspension gaps must be discarded, not counted.
+
+describe("hero/scrubMachine.ts fps guard suspension hygiene", () => {
+  it("does not count tab-suspension gaps toward the low-fps trip", () => {
+    let s = initialScrubState();
+    // Healthy runs interleaved with long suspensions (alt-tab, dev restart).
+    for (let cycle = 0; cycle < 4; cycle++) {
+      s = run(s, 1500, {}); // 1.5s healthy 60fps
+      s = step(s, { dtMs: 30000 }); // 30s suspension gap in a single tick
+    }
+    expect(s.belowThreshold).toBe(false);
+  });
+
+  it("still trips on genuinely sustained low fps after a suspension", () => {
+    let s = initialScrubState();
+    s = step(s, { dtMs: 30000 }); // suspension, discarded
+    for (let t = 0; t < 2500; t += 50) s = step(s, { dtMs: 50 }); // 20fps
+    expect(s.belowThreshold).toBe(true);
+  });
+});

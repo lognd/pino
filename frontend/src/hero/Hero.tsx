@@ -33,6 +33,11 @@ function isQuiescent(source: ScrubSource, progress: number): boolean {
 const POSTER_URL = "/brand/hero-poster.svg";
 const MAX_DPR = 2;
 
+/** Source init retry backoff (ms). A failed init is usually a transient
+ * fetch/import hiccup (dev-server restart, flaky network) -- retry before
+ * parking on the poster for good. */
+const INIT_RETRY_DELAYS_MS = [1500, 6000];
+
 type HeroMode = "poster" | "live";
 
 export function Hero() {
@@ -42,6 +47,7 @@ export function Hero() {
   const wordmarkHandle = useRef<WordmarkHandle>(null);
   const sourceRef = useRef<ScrubSource | null>(null);
   const [mode, setMode] = useState<HeroMode>("poster");
+  const [posterBroken, setPosterBroken] = useState(false);
   const [reduced] = useState<boolean>(prefersReducedMotion);
   const [touch] = useState<boolean>(isTouchDevice);
 
@@ -76,7 +82,8 @@ export function Hero() {
     if (!canvas || !container) return;
 
     let cancelled = false;
-    const start = async (): Promise<void> => {
+    let retryTimer = 0;
+    const start = async (attempt = 0): Promise<void> => {
       const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
       const cssW = container.clientWidth || 1280;
       const cssH = container.clientHeight || Math.round(cssW * 0.5);
@@ -93,8 +100,21 @@ export function Hero() {
         sourceRef.current = source;
         source.render(0);
         setMode("live");
-      } catch {
-        // Source unavailable (e.g. video stub) -- stay on the poster.
+      } catch (err) {
+        // Source unavailable (transient import/fetch failure, or the video
+        // stub): log it -- a silent black hero cost a debugging session --
+        // and retry with backoff before parking on the poster.
+        const retrying = attempt < INIT_RETRY_DELAYS_MS.length;
+        logWarn(
+          `hero: source init failed (attempt ${attempt + 1}${retrying ? ", retrying" : ", staying on poster"})`,
+          String(err),
+        );
+        if (!cancelled && retrying) {
+          retryTimer = window.setTimeout(
+            () => void start(attempt + 1),
+            INIT_RETRY_DELAYS_MS[attempt],
+          );
+        }
       }
     };
 
@@ -142,6 +162,7 @@ export function Hero() {
       cancelled = true;
       if (typeof w.cancelIdleCallback === "function") w.cancelIdleCallback(idleId);
       else window.clearTimeout(idleId);
+      if (retryTimer) window.clearTimeout(retryTimer);
       resizeObserver?.disconnect();
       if (resizeRaf) window.cancelAnimationFrame(resizeRaf);
       sourceRef.current?.dispose();
@@ -176,35 +197,43 @@ export function Hero() {
       className="relative aspect-[8/3] w-full overflow-hidden bg-mp-black-true"
       aria-hidden="true"
     >
-      {/* Poster: the frame that paints first and the reduced-motion / low-
-          power fallback. Hidden (not unmounted) once the canvas is live. */}
+      {/* Poster: the backdrop that paints first and the reduced-motion /
+          low-power fallback. Hidden (not unmounted) once the canvas is
+          live; hidden entirely if the asset fails, so a broken-image icon
+          never shows (the always-on wordmark keeps the hero branded). */}
       <img
         src={POSTER_URL}
         alt=""
         role="presentation"
         className="absolute inset-0 h-full w-full object-cover"
-        style={{ visibility: showLiveCanvas ? "hidden" : "visible" }}
+        style={{
+          visibility: showLiveCanvas ? "hidden" : "visible",
+          display: posterBroken ? "none" : undefined,
+        }}
+        onError={() => {
+          setPosterBroken(true);
+          logWarn("hero: poster failed to load", POSTER_URL);
+        }}
       />
       <canvas
         ref={canvasRef}
         className="absolute inset-0 h-full w-full object-cover"
         style={{ visibility: showLiveCanvas ? "visible" : "hidden" }}
       />
-      {/* Wordmark overlay: interactive when live, static (progress 0) on the
-          poster. The poster art already contains a whole lockup, so we only
-          overlay the live, fracturing wordmark. */}
       {/* Rest-state ambience: CSS-only drifting haze (doc 08's "subtly
           alive" rule) -- zero JS, disabled under prefers-reduced-motion. */}
       {showLiveCanvas && (
         <div className="mp-hero-ambient pointer-events-none absolute inset-0" />
       )}
-      {showLiveCanvas && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div ref={wordmarkRef} className="w-3/4 max-w-3xl">
-            <Wordmark ref={wordmarkHandle} className="w-full" />
-          </div>
+      {/* Wordmark overlay, ALWAYS mounted (doc 08 rung 1: "poster + static
+          wordmark"): static lockup at progress 0 in poster mode, driven
+          imperatively once live -- the hero stays branded even if the
+          poster asset never arrives. */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div ref={wordmarkRef} className="w-3/4 max-w-3xl">
+          <Wordmark ref={wordmarkHandle} className="w-full" />
         </div>
-      )}
+      </div>
     </div>
   );
 }

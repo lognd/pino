@@ -3,11 +3,11 @@
 // or invalid (a wrong, guessed, or expired token all return the SAME 404
 // per docs/design/02-auth-and-security.md -- never distinguished here
 // either). Supports cancel (with the "too close to start time" window
-// error in plain words) and resend-confirmation. Invoice link is a P4
-// stub (docs/design/05) -- rendered only if the backend ever sends an
-// invoice_pay_url (it does not yet, see api/bookings.ts's TODO(types)
-// note); a REAL link to the pay page once it does, not a hand-built
-// path -- see that note for why a raw invoice id would never work here.
+// error in plain words) and resend-confirmation. Invoice link (docs/design/05)
+// renders only when the backend sends a `pay_url` (deposit-carrying
+// bookings with a balance still due) -- a REAL link to the pay page, not a
+// hand-built path -- see api/bookings.ts's BookingDetailResponse.pay_url
+// note for why a raw invoice id would never work here.
 
 import { useState } from "react";
 import { useParams } from "react-router-dom";
@@ -180,9 +180,9 @@ export function ManageBooking() {
             </div>
           )}
 
-          {bookingQuery.data.invoice_pay_url && (
+          {bookingQuery.data.pay_url && (
             <a
-              href={bookingQuery.data.invoice_pay_url}
+              href={bookingQuery.data.pay_url}
               className="text-lg font-semibold text-mp-red-text underline"
             >
               {T.invoiceLinkLabel}

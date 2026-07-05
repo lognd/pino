@@ -428,6 +428,14 @@ export function Book() {
                   .
                 </p>
               )}
+              {result?.pay_url && (
+                <p className="text-lg text-mp-white">
+                  <a href={result.pay_url} className="font-semibold text-mp-red-text underline">
+                    {T.manage.invoiceLinkLabel}
+                  </a>
+                  {result.amount_due ? ` (${result.amount_due} due)` : null}
+                </p>
+              )}
               <BigButton type="button" onClick={() => window.print()}>
                 {T.printCta}
               </BigButton>

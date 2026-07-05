@@ -21,10 +21,15 @@ export type BookingCreateRequest = components["schemas"]["BookingCreateRequest"]
 export type AttestationInput = components["schemas"]["AttestationInput"];
 
 /** What the confirm step needs after POST /api/bookings: the booking id
- * + its private manage URL (also emailed to the guest). */
+ * + its private manage URL (also emailed to the guest). `pay_url` /
+ * `amount_due` are present only when the booked course carries a deposit
+ * (backend creates a "sent" deposit invoice and returns its stable pay
+ * link -- see api/bookings.py's create_booking_endpoint). */
 export interface BookingCreateResponse {
   booking_id: string;
   manage_url: string;
+  pay_url?: string | null;
+  amount_due?: string | null;
 }
 
 /** The manage-page view of one booking, resolved only via its manage
@@ -39,18 +44,16 @@ export interface BookingDetailResponse {
   location_name: string;
   location_addr: string;
   can_cancel_online: boolean;
-  // TODO(types): api/bookings.py's BookingDetailResponse does not send
-  // this yet (deposit invoicing is P4, docs/design/05) -- this field is
-  // a forward-compatible placeholder so ManageBooking.tsx's invoice-link
-  // can render the moment the backend adds it, with no ManageBooking.tsx
-  // change required. Deliberately a full pay URL (mirrors
-  // BookingCreateResponse.manage_url's own "hand back the whole signed
-  // URL, not a raw id" pattern), NOT the invoice's raw id/primary key --
-  // /pay/{token} resolves a 256-bit invoice-scoped pay token
-  // (service.find_invoice_by_pay_token), never the invoice row's id, so
-  // a raw id here would silently 404 every time (and worse, would invite
-  // guessing invoice ids to probe balances -- docs/design/02).
-  invoice_pay_url?: string | null;
+  // Deliberately a full pay URL (mirrors BookingCreateResponse.manage_url's
+  // own "hand back the whole signed URL, not a raw id" pattern), NOT the
+  // invoice's raw id/primary key -- /pay/{token} resolves a 256-bit
+  // invoice-scoped pay token (service.find_invoice_by_pay_token), never
+  // the invoice row's id, so a raw id here would silently 404 every time
+  // (and worse, would invite guessing invoice ids to probe balances --
+  // docs/design/02). Present only while a balance is actually due (backend
+  // omits it once the invoice is paid/voided).
+  pay_url?: string | null;
+  amount_due?: string | null;
   // Add-to-calendar affordances (backend api/bookings.py sends both): a
   // downloadable .ics for any calendar app plus a prefilled Google
   // Calendar link. Optional so older mock fixtures stay valid.

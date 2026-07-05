@@ -245,6 +245,22 @@ async def cancel_booking(
     if session is None:
         return Err(BookingError.SessionNotFound)
 
+    # Re-check booking status under the session lock: the guard above ran
+    # before we held any lock, so a concurrent double-cancel (two tabs, a
+    # double-click) can both pass it under READ COMMITTED. Re-fetching with
+    # FOR UPDATE and re-asserting status here makes the loser a no-op
+    # instead of re-running the cancel side effects (email, waitlist offer).
+    stmt = (
+        select(Booking).where(Booking.id == booking_id).with_for_update()
+    )
+    booking = (await db.execute(stmt)).scalar_one()
+    if booking.status != "confirmed":
+        logger.info(
+            "cancel_booking: booking_id=%s already cancelled (concurrent)",
+            booking_id,
+        )
+        return Err(BookingError.AlreadyCancelled)
+
     if not by_admin:
         now = datetime.now(timezone.utc)
         if not within_cancellation_window(

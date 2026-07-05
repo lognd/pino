@@ -20,7 +20,7 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,13 +46,17 @@ async def list_courses_admin(
     session: SessionInfo = Depends(require_staff),
 ) -> list[dict]:
     """Admin course listing, including inactive courses."""
-    raise NotImplementedError("see docs/design/14-admin-mockup.md")  # TODO(impl)
+    # FINDINGS.md L1: no backing domain function yet (tracked in
+    # TODO.md); an explicit 501 is an honest "not implemented" signal
+    # for a reachable, staff-authed route -- letting NotImplementedError
+    # propagate would surface as an unhandled 500 with a stack trace.
+    raise HTTPException(status_code=501, detail="not implemented")  # TODO(impl)
 
 
 @router.post("/courses")
 async def create_course(session: SessionInfo = Depends(require_staff)) -> dict:
     """Admin creates a new course."""
-    raise NotImplementedError("see docs/design/14-admin-mockup.md")  # TODO(impl)
+    raise HTTPException(status_code=501, detail="not implemented")  # TODO(impl)
 
 
 class CreateSessionRequest(BaseModel):
@@ -142,7 +146,7 @@ async def get_session_roster(
     class_session_id: str, session: SessionInfo = Depends(require_staff)
 ) -> list[dict]:
     """Admin roster listing for a session."""
-    raise NotImplementedError("see docs/design/14-admin-mockup.md")  # TODO(impl)
+    raise HTTPException(status_code=501, detail="not implemented")  # TODO(impl)
 
 
 class OnBehalfBookingRequest(BaseModel):

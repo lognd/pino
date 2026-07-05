@@ -120,6 +120,18 @@ class AppConfig(BaseModel):
     # Long random secret gating the subscribable ICS calendar feed
     # (/api/calendar/feed.ics?key=...). Calendar apps cannot send admin
     # session cookies, so the key IS the auth -- unset disables the feed.
+    #
+    # FINDINGS.md L2: most api/ modules snapshot AppConfig.from_external()
+    # once at import time (a deliberate project-wide pattern -- see
+    # auth.py, waivers.py, courses.py, invoices.py, calendar.py,
+    # admin_schedule.py), rather than re-reading env per request. This is
+    # safe under the normal deploy (env is present at import, and the
+    # process is RESTARTED, not just reloaded, on config change). Rotating
+    # this key specifically only takes effect on a full process restart --
+    # a reload path that keeps the old worker process alive would keep
+    # validating the old key via hmac.compare_digest. Operators rotating
+    # CALENDAR_FEED_KEY to revoke a leaked subscribe URL must restart the
+    # backend process, not just touch the env file.
     calendar_feed_key: str | None = None
     host: str = "127.0.0.1"
     port: int = 8000

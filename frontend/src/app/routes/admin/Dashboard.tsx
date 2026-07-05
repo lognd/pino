@@ -6,8 +6,55 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAdminDashboard } from "../../../api/dashboard";
+import { fetchBookingsBySource } from "../../../api/metrics";
 import { SampleBanner } from "../../../components/SampleBanner";
 import { formatAdminDateTime } from "../../../lib/adminTime";
+
+/** Web-vs-manual booking split -- the numbers the owner's site fee is
+ * keyed to, so they live on the first screen Mel (and Logan) see. */
+function BookingsBySourceSection() {
+  const { data } = useQuery({
+    queryKey: ["admin", "metrics", "bookings-by-source"],
+    queryFn: fetchBookingsBySource,
+  });
+  if (!data) return null;
+  const thisMonth = data.monthly[0];
+  return (
+    <section>
+      <h2 className="text-2xl font-bold uppercase text-mp-white">Bookings by source</h2>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="border-2 border-mp-border bg-mp-surface p-4">
+          <h3 className="text-lg font-bold uppercase text-mp-muted">Booked on the site</h3>
+          <p className="mt-1 text-3xl font-extrabold text-mp-white">
+            {data.totals.web.bookings}
+            <span className="ml-2 text-lg font-semibold text-mp-muted">
+              ({data.totals.web.seats} seats)
+            </span>
+          </p>
+          {thisMonth && (
+            <p className="mt-1 text-lg text-mp-muted">
+              This month: {thisMonth.web.bookings} bookings
+            </p>
+          )}
+        </div>
+        <div className="border-2 border-mp-border bg-mp-surface p-4">
+          <h3 className="text-lg font-bold uppercase text-mp-muted">Entered manually</h3>
+          <p className="mt-1 text-3xl font-extrabold text-mp-white">
+            {data.totals.admin.bookings}
+            <span className="ml-2 text-lg font-semibold text-mp-muted">
+              ({data.totals.admin.seats} seats)
+            </span>
+          </p>
+          {thisMonth && (
+            <p className="mt-1 text-lg text-mp-muted">
+              This month: {thisMonth.admin.bookings} bookings
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export function AdminDashboard() {
   const { data, isLoading, isError } = useQuery({
@@ -62,9 +109,17 @@ export function AdminDashboard() {
             </Link>
           </section>
 
+          <BookingsBySourceSection />
+
           <nav aria-label="Quick links" className="flex flex-wrap gap-6">
             <Link to="/admin/schedule" className="text-lg font-semibold text-mp-white underline">
               Schedule
+            </Link>
+            <Link to="/admin/calendar" className="text-lg font-semibold text-mp-white underline">
+              Calendar
+            </Link>
+            <Link to="/admin/logs" className="text-lg font-semibold text-mp-white underline">
+              Logs
             </Link>
             <Link to="/admin/students" className="text-lg font-semibold text-mp-white underline">
               Students

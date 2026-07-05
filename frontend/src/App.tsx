@@ -30,6 +30,8 @@ import { Pay } from "./app/routes/public/Pay";
 import { LegalPage } from "./app/routes/public/LegalPage";
 import { AdminLogin } from "./app/routes/admin/Login";
 import { AdminDashboard } from "./app/routes/admin/Dashboard";
+import { AdminCalendar } from "./app/routes/admin/Calendar";
+import { AdminLogs } from "./app/routes/admin/Logs";
 import { AdminSchedule } from "./app/routes/admin/Schedule";
 import { AdminSessionDetail } from "./app/routes/admin/SessionDetail";
 import { AdminStudents } from "./app/routes/admin/Students";
@@ -81,6 +83,22 @@ export function App() {
           element={
             <AdminGuard>
               <AdminDashboard />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/calendar"
+          element={
+            <AdminGuard>
+              <AdminCalendar />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/logs"
+          element={
+            <AdminGuard>
+              <AdminLogs />
             </AdminGuard>
           }
         />

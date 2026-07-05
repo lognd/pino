@@ -165,6 +165,8 @@ export const handlers = [
       session_id: entry.session_id,
       student_id: entry.student_id,
       party_size: entry.party_size,
+      // Waitlist promotion happens from the admin screen -> manual entry.
+      source: "admin" as const,
       status: "confirmed" as const,
       invoice_id: null,
     };
@@ -261,5 +263,64 @@ export const handlers = [
     const body = (await request.json()) as Partial<typeof settings>;
     Object.assign(settings, body);
     return HttpResponse.json(settings);
+  }),
+
+  // --- Owner metrics (/admin dashboard tile) --------------------------------
+  // Real endpoint: GET /api/admin/metrics/bookings-by-source
+  // (api/admin_metrics.py). Computed live from the mock bookings so
+  // waitlist promotions etc. move the numbers during a demo.
+  http.get("/api/admin/metrics/bookings-by-source", () => {
+    const zero = () => ({ bookings: 0, seats: 0 });
+    const totals = { web: zero(), admin: zero() };
+    for (const b of bookings) {
+      if (b.status === "cancelled") continue;
+      totals[b.source].bookings += 1;
+      totals[b.source].seats += b.party_size;
+    }
+    // The mock data has no created_at; the demo shows one bucket for the
+    // frozen mock month (doc 14's fixed "2026-07" sample clock).
+    const monthly = [{ month: "2026-07", web: totals.web, admin: totals.admin }];
+    return HttpResponse.json({ totals, monthly });
+  }),
+
+  // --- Calendar sync (/admin/calendar) ---------------------------------------
+  // Real endpoint: GET /api/admin/calendar/feed-url (api/calendar.py).
+  http.get("/api/admin/calendar/feed-url", () => {
+    return HttpResponse.json({
+      feed_url:
+        "https://SITE-DOMAIN-TBD/api/calendar/feed.ics?key=SAMPLE-FEED-KEY",
+    });
+  }),
+
+  // --- Logs (/admin/logs) -----------------------------------------------------
+  // Real endpoints: GET /api/admin/logs/tail, GET /api/admin/logs/files
+  // (api/admin_logs.py). Lines mirror logging/json_formatter.py's shape.
+  http.get("/api/admin/logs/tail", () => {
+    const line = (level: string, logger: string, message: string, minute: number) =>
+      JSON.stringify({
+        timestamp: `2026-07-04T09:${String(minute).padStart(2, "0")}:00+00:00`,
+        level,
+        logger,
+        message,
+        request_id: `req-${minute}`,
+        module: logger.split(".").pop(),
+        line: 42,
+      });
+    return HttpResponse.json([
+      line("INFO", "melpino_backend.app.app", "SAMPLE -- application startup complete", 1),
+      line("INFO", "melpino_backend.domain.booking.service", "create_booking: created booking_id=booking-2 session_id=session-1 party_size=2 source=web", 6),
+      line("INFO", "melpino_backend.domain.booking.service", "create_booking: created booking_id=booking-3 session_id=session-1 party_size=1 source=admin", 12),
+      line("WARNING", "melpino_backend.auth.rate_limit", "SAMPLE -- booking_create rate limit tripped for 203.0.113.9", 18),
+      line("INFO", "melpino_backend.api.calendar", "calendar_feed: served 6 events", 25),
+      line("ERROR", "melpino_backend.domain.notifications", "SAMPLE -- confirmation email failed (SMTP unreachable), booking kept", 31),
+    ]);
+  }),
+
+  http.get("/api/admin/logs/files", () => {
+    return HttpResponse.json([
+      { name: "app.log", size_bytes: 48213, modified_at: 1783248000 },
+      { name: "app.log.2026-07-03", size_bytes: 202144, modified_at: 1783161600 },
+      { name: "app.log.2026-07-02", size_bytes: 187002, modified_at: 1783075200 },
+    ]);
   }),
 ];

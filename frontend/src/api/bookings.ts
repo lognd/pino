@@ -51,6 +51,11 @@ export interface BookingDetailResponse {
   // a raw id here would silently 404 every time (and worse, would invite
   // guessing invoice ids to probe balances -- docs/design/02).
   invoice_pay_url?: string | null;
+  // Add-to-calendar affordances (backend api/bookings.py sends both): a
+  // downloadable .ics for any calendar app plus a prefilled Google
+  // Calendar link. Optional so older mock fixtures stay valid.
+  ics_url?: string;
+  google_calendar_url?: string;
 }
 
 /** POST /api/bookings -- rate-limited 5/hour (RateLimitedError on 429),

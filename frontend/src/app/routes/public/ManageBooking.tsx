@@ -155,6 +155,31 @@ export function ManageBooking() {
             <p className="text-lg text-mp-white">{T.cancelWindowClosedNote}</p>
           )}
 
+          {/* Add-to-calendar: a one-click Google link plus a plain .ics
+              download for Apple/Outlook (backend api/bookings.py). Plain
+              labeled links, elderly-first (doc 09). */}
+          {bookingQuery.data.status === "confirmed" && bookingQuery.data.google_calendar_url && (
+            <div className="flex flex-col gap-2">
+              <a
+                href={bookingQuery.data.google_calendar_url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-lg font-semibold text-mp-white underline underline-offset-4"
+              >
+                Add this class to Google Calendar
+              </a>
+              {bookingQuery.data.ics_url && (
+                <a
+                  href={bookingQuery.data.ics_url}
+                  className="text-lg font-semibold text-mp-white underline underline-offset-4"
+                  download
+                >
+                  Download for Apple or Outlook calendars (.ics)
+                </a>
+              )}
+            </div>
+          )}
+
           {bookingQuery.data.invoice_pay_url && (
             <a
               href={bookingQuery.data.invoice_pay_url}

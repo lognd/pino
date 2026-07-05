@@ -55,6 +55,9 @@ export interface MockBooking {
   student_id: string;
   party_size: number;
   status: "confirmed" | "cancelled" | "attended" | "no_show";
+  // Origin ('web' = booked through the site, 'admin' = Mel entered it
+  // manually) -- feeds the bookings-by-source billing metrics.
+  source: "web" | "admin";
   invoice_id: string | null;
 }
 
@@ -247,16 +250,16 @@ export const students: MockStudent[] = [
 ];
 
 export const bookings: MockBooking[] = [
-  { id: "booking-1", session_id: "session-1", student_id: "student-1", party_size: 1, status: "confirmed", invoice_id: "invoice-1" },
-  { id: "booking-2", session_id: "session-1", student_id: "student-2", party_size: 2, status: "confirmed", invoice_id: "invoice-2" },
-  { id: "booking-3", session_id: "session-1", student_id: "student-3", party_size: 1, status: "confirmed", invoice_id: "invoice-3" },
-  { id: "booking-4", session_id: "session-2", student_id: "student-4", party_size: 1, status: "confirmed", invoice_id: "invoice-4" },
-  { id: "booking-5", session_id: "session-2", student_id: "student-5", party_size: 1, status: "confirmed", invoice_id: "invoice-5" },
-  { id: "booking-6", session_id: "session-3", student_id: "student-6", party_size: 1, status: "confirmed", invoice_id: "invoice-6" },
-  { id: "booking-7", session_id: "session-3", student_id: "student-7", party_size: 1, status: "confirmed", invoice_id: null },
-  { id: "booking-8", session_id: "session-5", student_id: "student-8", party_size: 1, status: "confirmed", invoice_id: "invoice-7" },
-  { id: "booking-9", session_id: "session-6", student_id: "student-9", party_size: 1, status: "attended", invoice_id: "invoice-8" },
-  { id: "booking-10", session_id: "session-6", student_id: "student-10", party_size: 1, status: "no_show", invoice_id: "invoice-9" },
+  { id: "booking-1", session_id: "session-1", student_id: "student-1", party_size: 1, source: "web", status: "confirmed", invoice_id: "invoice-1" },
+  { id: "booking-2", session_id: "session-1", student_id: "student-2", party_size: 2, source: "web", status: "confirmed", invoice_id: "invoice-2" },
+  { id: "booking-3", session_id: "session-1", student_id: "student-3", party_size: 1, source: "admin", status: "confirmed", invoice_id: "invoice-3" },
+  { id: "booking-4", session_id: "session-2", student_id: "student-4", party_size: 1, source: "web", status: "confirmed", invoice_id: "invoice-4" },
+  { id: "booking-5", session_id: "session-2", student_id: "student-5", party_size: 1, source: "web", status: "confirmed", invoice_id: "invoice-5" },
+  { id: "booking-6", session_id: "session-3", student_id: "student-6", party_size: 1, source: "web", status: "confirmed", invoice_id: "invoice-6" },
+  { id: "booking-7", session_id: "session-3", student_id: "student-7", party_size: 1, source: "admin", status: "confirmed", invoice_id: null },
+  { id: "booking-8", session_id: "session-5", student_id: "student-8", party_size: 1, source: "web", status: "confirmed", invoice_id: "invoice-7" },
+  { id: "booking-9", session_id: "session-6", student_id: "student-9", party_size: 1, source: "web", status: "attended", invoice_id: "invoice-8" },
+  { id: "booking-10", session_id: "session-6", student_id: "student-10", party_size: 1, source: "admin", status: "no_show", invoice_id: "invoice-9" },
 ];
 
 export const waitlistEntries: MockWaitlistEntry[] = [

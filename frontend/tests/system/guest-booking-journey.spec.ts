@@ -28,7 +28,7 @@ test.describe("Guest booking journey", () => {
     // Step 2: your details.
     await expect(page.getByText("Step 2 of 3")).toBeVisible();
     await page.getByLabel("Full name").fill("Jane Guest");
-    await page.getByLabel("Email address").fill(`jane-${Date.now()}@example.test`);
+    await page.getByLabel("Email address").fill(`jane-${Date.now()}@example.com`);
     await page.getByLabel(/It is okay to text me reminders/).check();
     await page.getByLabel(/I have read and agree to the statement above/).check();
     await page.getByRole("button", { name: "Continue" }).click();

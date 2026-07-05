@@ -150,7 +150,7 @@ async def test_browse_book_confirm_receive_email_cancel(
         json={
             "session_id": session_id,
             "full_name": "Journey Guest",
-            "email": "journey-guest@example.test",
+            "email": "journey-guest@example.com",
             "party_size": 1,
             "attestation": {"version": "v1", "accepted": True},
         },
@@ -164,7 +164,7 @@ async def test_browse_book_confirm_receive_email_cancel(
 
     assert len(fake_smtp.messages) == 1
     sent = fake_smtp.messages[0]
-    assert sent["To"] == "journey-guest@example.test"
+    assert sent["To"] == "journey-guest@example.com"
 
     manage_resp = await client.get(f"/api/bookings/manage/{token}")
     assert manage_resp.status_code == 200
@@ -190,7 +190,7 @@ async def test_waitlist_promotion_journey(
         json={
             "session_id": session_id,
             "full_name": "First Guest",
-            "email": "first-guest@example.test",
+            "email": "first-guest@example.com",
             "party_size": 1,
             "attestation": {"version": "v1", "accepted": True},
         },
@@ -206,7 +206,7 @@ async def test_waitlist_promotion_journey(
         json={
             "session_id": session_id,
             "full_name": "Waitlisted Guest",
-            "email": "waitlisted-guest@example.test",
+            "email": "waitlisted-guest@example.com",
             "party_size": 1,
             "attestation": {"version": "v1", "accepted": True},
         },
@@ -224,7 +224,7 @@ async def test_waitlist_promotion_journey(
     # and a waitlist_offer email for the freed seat (to the waitlisted one).
     assert len(fake_smtp.messages) == 2
     offer_msgs = [
-        m for m in fake_smtp.messages if m["To"] == "waitlisted-guest@example.test"
+        m for m in fake_smtp.messages if m["To"] == "waitlisted-guest@example.com"
     ]
     assert len(offer_msgs) == 1
 
@@ -233,7 +233,7 @@ async def test_waitlist_promotion_journey(
         json={
             "session_id": session_id,
             "full_name": "Waitlisted Guest",
-            "email": "waitlisted-guest@example.test",
+            "email": "waitlisted-guest@example.com",
             "party_size": 1,
             "attestation": {"version": "v1", "accepted": True},
         },
@@ -253,7 +253,7 @@ async def test_honeypot_silently_no_ops(booking_client: AsyncClient) -> None:
         json={
             "session_id": session_id,
             "full_name": "A Bot",
-            "email": "bot@example.test",
+            "email": "bot@example.com",
             "attestation": {"version": "v1", "accepted": True},
             "honeypot_field": "filled-in-by-a-bot",
         },
@@ -290,7 +290,7 @@ async def test_rate_limit_returns_429_after_threshold(
             json={
                 "session_id": session_id,
                 "full_name": "Rate Limit Prober",
-                "email": "prober@example.test",
+                "email": "prober@example.com",
                 "attestation": {"version": "v1", "accepted": True},
                 "honeypot_field": "bot",
             },
@@ -303,7 +303,7 @@ async def test_rate_limit_returns_429_after_threshold(
         json={
             "session_id": session_id,
             "full_name": "Rate Limit Prober",
-            "email": "prober@example.test",
+            "email": "prober@example.com",
             "attestation": {"version": "v1", "accepted": True},
             "honeypot_field": "bot",
         },
@@ -324,7 +324,7 @@ async def test_cross_token_isolation(booking_client: AsyncClient) -> None:
         json={
             "session_id": session_id,
             "full_name": "Guest A",
-            "email": "guest-a@example.test",
+            "email": "guest-a@example.com",
             "attestation": {"version": "v1", "accepted": True},
         },
         headers={"X-Forwarded-For": "journey-isolation-a"},
@@ -334,7 +334,7 @@ async def test_cross_token_isolation(booking_client: AsyncClient) -> None:
         json={
             "session_id": session_id,
             "full_name": "Guest B",
-            "email": "guest-b@example.test",
+            "email": "guest-b@example.com",
             "attestation": {"version": "v1", "accepted": True},
         },
         headers={"X-Forwarded-For": "journey-isolation-b"},

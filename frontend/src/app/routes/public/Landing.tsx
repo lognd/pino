@@ -87,9 +87,9 @@ export function Landing() {
 
       {/* Intro block. Real, screen-reader/SEO-visible H1 -- independent of the
           hero's decorative aria-hidden wordmark (doc 08's acceptance criteria).
-          Vertical rhythm uses one spacing scale (py-16 sm:py-20 per section,
+          Vertical rhythm uses one spacing scale (py-10 sm:py-20 per section,
           space-y-6 within), not ad-hoc margins (doc 09 polish pass). */}
-      <section className="mx-auto max-w-6xl space-y-6 px-4 py-16 sm:py-20">
+      <section className="mx-auto max-w-6xl space-y-6 px-4 py-10 sm:py-20">
         <h1 className="font-display text-4xl font-extrabold italic uppercase text-mp-white sm:text-5xl">
           {businessShortName}
         </h1>
@@ -109,7 +109,7 @@ export function Landing() {
           band -- a deliberate hard-edged section break, not a soft gradient. */}
       <section
         aria-labelledby="courses-heading"
-        className="mp-diagonal-divider border-y-2 border-mp-border bg-mp-black-true py-16 sm:py-20"
+        className="mp-diagonal-divider border-y-2 border-mp-border bg-mp-black-true py-10 sm:py-20"
       >
         <div className="mx-auto max-w-6xl px-4">
           <h2
@@ -146,7 +146,7 @@ export function Landing() {
 
       {/* Credibility strip -- designed as a row of hard-edged stat blocks with
           a red key-line, not a bare bulleted list (doc 09). */}
-      <section aria-labelledby="credibility-heading" className="mx-auto max-w-6xl px-4 py-16 sm:py-20">
+      <section aria-labelledby="credibility-heading" className="mx-auto max-w-6xl px-4 py-10 sm:py-20">
         <h2
           id="credibility-heading"
           className="font-display text-3xl font-extrabold italic uppercase text-mp-white sm:text-4xl"
@@ -166,7 +166,7 @@ export function Landing() {
       {/* "From the range" strip -- a small additive teaser (3 images) linking
           to the full gallery (doc 15). Images only, so Landing never mounts a
           player; each is a layout-stable LazyMedia box. */}
-      <section aria-labelledby="range-strip-heading" className="mx-auto max-w-6xl px-4 py-16 sm:py-20">
+      <section aria-labelledby="range-strip-heading" className="mx-auto max-w-6xl px-4 py-10 sm:py-20">
         <h2
           id="range-strip-heading"
           className="font-display text-3xl font-extrabold italic uppercase text-mp-white sm:text-4xl"
@@ -196,7 +196,7 @@ export function Landing() {
           primary against the intro CTA. */}
       <section
         aria-labelledby="cta-band-heading"
-        className="mp-diagonal-divider bg-mp-red py-16 text-center sm:py-20"
+        className="mp-diagonal-divider bg-mp-red py-10 text-center sm:py-20"
       >
         <div className="mx-auto max-w-6xl space-y-6 px-4">
           <h2

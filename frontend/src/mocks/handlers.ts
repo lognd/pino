@@ -11,12 +11,23 @@
 // the in-memory arrays in ./data so the mockup feels alive for the tab
 // session; a reload resets everything (desirable per doc 14).
 //
-// Fake auth gate: isMockAuthed lives in sessionStorage (wiped on tab
-// close, survives reload -- the closest mock-mode analog to the real
-// backend's HttpOnly session cookie) under the key below. Grants no real
-// security; see AdminGuard.tsx and Login.tsx.
+// Auth (/api/auth/login, /api/auth/me, /api/auth/logout) has graduated
+// per docs/design/14's checklist: the real backend (api/auth.py,
+// domain/auth/service.py) is fully implemented against
+// docs/design/02-auth-and-security.md. In plain `npm run dev`
+// (VITE_USE_MOCKS unset/false) MSW still auto-starts for every /admin
+// route (main.tsx's `import.meta.env.DEV` gate, needed so the still-mocked
+// screens below work without a flag), but auth itself now bypasses to the
+// real backend so real admin credentials actually work -- see
+// AdminGuard.tsx / Login.tsx, which call the same client either way.
+//
+// The explicit `VITE_USE_MOCKS=true` build (npm run dev:mock, and the
+// dist-mock/ build the Playwright "admin" system-test project serves,
+// see tests/system/admin-mockup.spec.ts) has NO live backend at all, so
+// auth there keeps the original fake sessionStorage gate (any email +
+// MOCK_LOGIN_PASSWORD).
 
-import { http, HttpResponse } from "msw";
+import { bypass, http, HttpResponse } from "msw";
 import {
   bookings,
   courses,
@@ -28,6 +39,8 @@ import {
   waivers,
   type MockPayment,
 } from "./data";
+
+const useRealAuth = import.meta.env.VITE_USE_MOCKS !== "true";
 
 export const MOCK_AUTH_SESSION_KEY = "mp_admin_mock_authed";
 export const MOCK_LOGIN_PASSWORD = "letmein";
@@ -53,30 +66,33 @@ function waitlistFor(sessionId: string) {
 }
 
 export const handlers = [
-  // --- Fake auth gate (docs/design/14-admin-mockup.md) -------------------
-  // Real endpoints: POST /api/auth/login, GET /api/auth/me,
-  // POST /api/auth/logout. Accepts any non-empty email + the hardcoded
-  // demo password; flips the sessionStorage flag AdminGuard/useMe reads.
-  http.post("/api/auth/login", async ({ request }) => {
-    const body = (await request.json()) as { email?: string; password?: string };
-    if (!body.email || body.password !== MOCK_LOGIN_PASSWORD) {
-      return HttpResponse.json({ code: "invalid_credentials", message: "Invalid email or password" }, { status: 401 });
-    }
-    sessionStorage.setItem(MOCK_AUTH_SESSION_KEY, "true");
-    return HttpResponse.json({ status: "ok" });
-  }),
-
-  http.post("/api/auth/logout", () => {
-    sessionStorage.removeItem(MOCK_AUTH_SESSION_KEY);
-    return HttpResponse.json({ status: "ok" });
-  }),
-
-  http.get("/api/auth/me", () => {
-    if (!isMockAuthed()) {
-      return HttpResponse.json({ code: "unauthenticated", message: "Not logged in" }, { status: 401 });
-    }
-    return HttpResponse.json({ user_id: "mock-admin-1", role: "admin" });
-  }),
+  // --- Auth (see note above: real backend outside VITE_USE_MOCKS=true) ---
+  ...(useRealAuth
+    ? [
+        http.post("/api/auth/login", ({ request }) => fetch(bypass(request))),
+        http.post("/api/auth/logout", ({ request }) => fetch(bypass(request))),
+        http.get("/api/auth/me", ({ request }) => fetch(bypass(request))),
+      ]
+    : [
+        http.post("/api/auth/login", async ({ request }) => {
+          const body = (await request.json()) as { email?: string; password?: string };
+          if (!body.email || body.password !== MOCK_LOGIN_PASSWORD) {
+            return HttpResponse.json({ code: "invalid_credentials", message: "Invalid email or password" }, { status: 401 });
+          }
+          sessionStorage.setItem(MOCK_AUTH_SESSION_KEY, "true");
+          return HttpResponse.json({ status: "ok" });
+        }),
+        http.post("/api/auth/logout", () => {
+          sessionStorage.removeItem(MOCK_AUTH_SESSION_KEY);
+          return HttpResponse.json({ status: "ok" });
+        }),
+        http.get("/api/auth/me", () => {
+          if (!isMockAuthed()) {
+            return HttpResponse.json({ code: "unauthenticated", message: "Not logged in" }, { status: 401 });
+          }
+          return HttpResponse.json({ user_id: "mock-admin-1", role: "admin" });
+        }),
+      ]),
 
   // --- Dashboard (/admin) -------------------------------------------------
   // Real endpoint: GET /api/admin/dashboard

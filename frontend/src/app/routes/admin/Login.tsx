@@ -1,13 +1,7 @@
-// Fake login gate -- docs/design/14-admin-mockup.md: accepts any
-// non-empty input (or a hardcoded demo credential) and flips an
-// in-memory isMockAuthed flag. Grants NO real security; its only jobs
-// are to show Mel roughly where the real login will sit and keep casual
-// eyes off the mockup.
-//
-// This component calls the same api/auth.ts login() the real backend will
-// answer -- it does not know MSW exists (doc 14's "component does not
-// change" contract). The demo-password hint below is mockup UX, not a
-// real credential.
+// Real admin login -- see docs/design/02-auth-and-security.md. Calls
+// api/auth.ts's login(), which the real backend answers (api/auth.py);
+// only the fully-mocked VITE_USE_MOCKS=true build (mocks/handlers.ts)
+// still fakes this endpoint, per docs/design/14's graduation checklist.
 
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
@@ -40,9 +34,6 @@ export function AdminLogin() {
       <h1 className="font-display text-4xl font-extrabold italic uppercase text-mp-white">
         Admin login
       </h1>
-      <p className="mt-2 text-lg text-mp-muted">
-        Mockup gate -- any email + password <code>letmein</code>.
-      </p>
       <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-6">
         <Field
           id="email"

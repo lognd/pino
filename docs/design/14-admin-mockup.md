@@ -65,14 +65,19 @@ none of them survive unchanged.
 
 ### Route gating
 
-The admin SPA mounts at `/admin` behind a **fake login gate**. The gate
-is a single screen that accepts any non-empty input (or a hardcoded
-demo credential) and flips an in-memory `isMockAuthed` flag -- it does
-NOT call a real auth backend and grants no real security. Its only jobs
-are (a) to show Mel roughly where the real login will sit, and (b) to
-keep casual eyes off the mockup. Real auth is out of scope here; it will
-be specified in the backend auth doc and swapped in when the app
-graduates.
+The admin SPA mounts at `/admin` behind a login gate at `/admin/login`.
+**Auth itself has graduated** (see "Graduation path" below): outside the
+`VITE_USE_MOCKS=true` build, `/api/auth/login`, `/api/auth/me`, and
+`/api/auth/logout` bypass MSW and hit the real backend
+(`api/auth.py` / `domain/auth/service.py`, see
+[02-auth-and-security.md](02-auth-and-security.md)) -- a real admin
+account (seeded via `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`) is
+required. The `VITE_USE_MOCKS=true` build (used by `npm run dev:mock`
+and the Playwright "admin" system-test project, which has no live
+backend) keeps the original fake sessionStorage gate (any email +
+`MOCK_LOGIN_PASSWORD`) so those still work standalone. Every other
+`/admin/*` screen below this point is still a genuine MSW mockup --
+AdminGuard's real `/api/auth/me` check is the sole gate they rely on.
 
 ### All data comes from MSW
 

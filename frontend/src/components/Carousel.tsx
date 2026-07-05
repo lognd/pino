@@ -33,13 +33,16 @@ const SWIPE_THRESHOLD_PX = 50;
 /** One uniform stage ratio for every slide, regardless of each item's own
  * manifest aspect -- mixed portrait/landscape/square boxes made the track
  * height jump between slides ("looks weird with different aspect ratios").
- * Images cover-crop into it; full-bleed videos/images letterbox (contain). */
+ * Every item is RESIZED TO FIT WITHIN the stage (contain): a portrait or
+ * square shot letterboxes against the surface instead of losing its top
+ * and bottom to a cover-crop (user feedback 2026-07-05). Landscape items
+ * share the stage's ratio, so they fill it edge to edge either way. */
 const STAGE_ASPECT = "16 / 9";
 
 /** Renders the media for one slide -- image via LazyMedia, video via the
  * click-to-play gate (doc 15). One place so every variant treats media the
  * same way. */
-function SlideMedia({ item, fit = "cover" }: { item: MediaItem; fit?: "cover" | "contain" }) {
+function SlideMedia({ item }: { item: MediaItem }) {
   if (item.kind === "video") return <ClickToPlayVideo item={item} aspectRatio={STAGE_ASPECT} />;
   return (
     <LazyMedia
@@ -47,7 +50,7 @@ function SlideMedia({ item, fit = "cover" }: { item: MediaItem; fit?: "cover" | 
       alt={item.alt}
       aspect={item.aspect}
       aspectRatio={STAGE_ASPECT}
-      fit={fit}
+      fit="contain"
     />
   );
 }
@@ -193,7 +196,7 @@ export function Carousel({ items, variant = "edge-peek", ariaLabel }: CarouselPr
               style={{ width: `${slideBasis}%` }}
               aria-hidden={i === index ? undefined : true}
             >
-              <SlideMedia item={item} fit={variant === "full-bleed" ? "contain" : "cover"} />
+              <SlideMedia item={item} />
               {item.caption && variant !== "full-bleed" && (
                 <p className="mt-2 text-lg text-mp-white">{item.caption}</p>
               )}

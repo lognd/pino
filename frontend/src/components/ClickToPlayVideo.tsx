@@ -77,7 +77,10 @@ export function ClickToPlayVideo({ item, aspectRatio, className }: ClickToPlayVi
           loading="lazy"
           decoding="async"
           draggable={false}
-          className="h-full w-full select-none object-cover"
+          // Under a stage-ratio override the thumb must fit WITHIN the box
+          // (letterbox), not cover-crop its top/bottom away; in its native
+          // box the ratios match and cover fills exactly.
+          className={`h-full w-full select-none ${aspectRatio ? "object-contain" : "object-cover"}`}
         />
         <span
           aria-hidden="true"

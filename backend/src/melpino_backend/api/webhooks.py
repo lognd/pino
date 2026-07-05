@@ -50,6 +50,13 @@ async def stripe_webhook(
         raise HTTPException(status_code=400, detail="missing stripe-signature header")
 
     cfg = AppConfig.from_external(argparse.Namespace())
+    if not cfg.stripe_webhook_secret or cfg.stripe_webhook_secret == "whsec_fake":
+        # Fail closed: an unset (None) or known-constant secret means this
+        # deploy never configured STRIPE_WEBHOOK_SECRET, so
+        # construct_event would validate a signature anyone can forge
+        # (see config.py's stripe_webhook_secret comment).
+        _log.error("stripe webhook rejected: STRIPE_WEBHOOK_SECRET is not configured")
+        raise HTTPException(status_code=503, detail="stripe webhooks not configured")
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, cfg.stripe_webhook_secret

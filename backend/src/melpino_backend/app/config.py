@@ -35,7 +35,15 @@ class AppConfig(BaseModel):
     # Stripe to appear configured must set this explicitly, e.g. via
     # app_config fixture overrides or PAYMENT_PROCESSOR_SECRET.
     payment_processor_secret: str | None = None
-    stripe_webhook_secret: str = "whsec_fake"
+    # None means "not configured" -- matching payment_processor_secret's
+    # own convention. Previously defaulted to the publicly-known constant
+    # "whsec_fake", which construct_event() would happily validate against
+    # a forged webhook signed with that same constant if the real env var
+    # was ever left unset in a deploy (see api/webhooks.py's fail-closed
+    # check, which rejects None/"whsec_fake" before calling
+    # construct_event). Tests that need a working webhook secret must set
+    # this explicitly.
+    stripe_webhook_secret: str | None = None
     # None means "talk to the real api.stripe.com" -- only ever set to
     # something else in test/CI, pointing at testing/fake_stripe.py.
     stripe_api_base: str | None = None

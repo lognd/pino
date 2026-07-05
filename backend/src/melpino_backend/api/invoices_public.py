@@ -23,6 +23,8 @@ import uuid
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from melpino_backend.api.errors import to_http_exception
@@ -281,17 +283,44 @@ async def capture_paypal_order_endpoint(
         raise to_http_exception(InvoiceError.NotOwned)
 
     payment_status = "succeeded" if capture.status == "COMPLETED" else "pending"
-    payment = Payment(
-        id=uuid.uuid4(),
-        invoice_id=invoice.id,
-        method="paypal",
-        paypal_order_id=order_id,
-        paypal_capture_id=capture.capture_id,
-        amount=capture.captured_amount,
-        status=payment_status,
-    )
-    db.add(payment)
-    await db.flush()
+    try:
+        # A SAVEPOINT, not a bare flush -- mirrors webhooks.py's Stripe
+        # Payment insert. A partial capture (invoice stays "sent"/
+        # "overdue", so the status guard above doesn't reject it) followed
+        # by a client retry replays the SAME paypal_capture_id (PayPal's
+        # idempotency_key dedupes it), which would otherwise hit
+        # uq_payments_paypal_capture_id and 500 the request instead of
+        # completing as a no-op.
+        async with db.begin_nested():
+            db.add(
+                Payment(
+                    id=uuid.uuid4(),
+                    invoice_id=invoice.id,
+                    method="paypal",
+                    paypal_order_id=order_id,
+                    paypal_capture_id=capture.capture_id,
+                    amount=capture.captured_amount,
+                    status=payment_status,
+                )
+            )
+            await db.flush()
+    except IntegrityError:
+        # Another concurrent/retried request for this exact capture_id
+        # already recorded the Payment -- re-read it and report its
+        # status idempotently instead of erroring.
+        existing_stmt = select(Payment).where(
+            Payment.paypal_capture_id == capture.capture_id
+        )
+        existing = (await db.execute(existing_stmt)).scalar_one()
+        await db.commit()
+        _log.info(
+            "paypal capture already recorded -- idempotent no-op",
+            extra={
+                "invoice_id": str(invoice.id),
+                "paypal_capture_id": capture.capture_id,
+            },
+        )
+        return {"status": existing.status}
     if payment_status == "succeeded":
         paid_so_far = await service.get_paid_so_far(db, invoice)
         if paid_so_far > invoice.amount_total:

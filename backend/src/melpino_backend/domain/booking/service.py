@@ -314,14 +314,36 @@ async def offer_freed_seat(
     """Offers a freed seat to the OLDEST waitlist entry that fits (see
     doc 04): sends a waitlist_offer email pre-filling the booking flow and
     stamps notified_at. Offers are not exclusive holds -- first to
-    complete a booking wins. Best-effort; never raises."""
+    complete a booking wins. Best-effort; never raises.
+
+    Excludes (see FINDINGS.md M2/L2):
+    - entries whose student already holds a confirmed booking on this
+      session (they already converted; re-offering blocks the queue for
+      everyone behind them and spams someone who doesn't need it).
+    - entries notified within the last hour (cooldown so back-to-back
+      cancels don't re-email the same waitlister twice for what is, from
+      their view, the same still-open opportunity).
+    """
     from melpino_backend.domain.notifications import notify
 
+    already_booked = (
+        select(Booking.id)
+        .where(
+            Booking.session_id == session_id,
+            Booking.student_id == WaitlistEntry.student_id,
+            Booking.status == "confirmed",
+        )
+        .exists()
+    )
+    notify_cooldown = datetime.now(timezone.utc) - timedelta(hours=1)
     stmt = (
         select(WaitlistEntry)
         .where(
             WaitlistEntry.session_id == session_id,
             WaitlistEntry.party_size <= freed_capacity,
+            ~already_booked,
+            (WaitlistEntry.notified_at.is_(None))
+            | (WaitlistEntry.notified_at < notify_cooldown),
         )
         .order_by(WaitlistEntry.created_at)
         .limit(1)

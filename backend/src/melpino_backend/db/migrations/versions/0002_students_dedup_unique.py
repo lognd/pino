@@ -8,6 +8,16 @@ splitting roster/booking history. This adds the unique index the
 service's dedup key was always supposed to be backed by; the service
 now catches the resulting IntegrityError and re-selects the winner.
 
+No de-dupe pre-step is included here: this migration set has never been
+run against a production/live database (repo is pre-launch -- see
+README.md's "no feature implementation yet" / docs/design/11-deployment.md;
+git history is scaffold-through-build commits only, no deploy record). If
+this migration is ever applied to a database that already has real
+booking history, add a de-dupe pre-step (repoint bookings/waitlist/
+invoices from loser rows to the survivor, then delete losers) before
+create_index -- do NOT assume this comment still holds once a real
+deploy has happened.
+
 Revision ID: 0002_students_dedup_unique
 Revises: 0001_booking_source
 Create Date: 2026-07-05 00:00:00.000000

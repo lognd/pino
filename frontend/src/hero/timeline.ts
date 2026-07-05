@@ -63,6 +63,83 @@ export function clampLuminanceStep(prev: number, target: number, dtMs: number): 
   return target;
 }
 
+/** Progress below which a finished flash re-arms (a fresh engagement cycle). */
+export const FLASH_REARM_PROGRESS = SHOT_MOMENT * 0.4;
+/** A rising luminance counts as "the flash has displayed" past this fraction
+ * of its own target (relative, so quieter variants still complete a cycle). */
+const FLASH_PEAK_FRACTION = 0.7;
+/** Once a displayed flash decays below this it is spent for the cycle. */
+const FLASH_SPENT_LUMINANCE = 0.05;
+
+/** Stateful WCAG 2.3.1 flash guard, stepped once per rendered frame.
+ *
+ * Guarantees, regardless of how progress is scrubbed:
+ *   - displayed luminance never traverses [0,1] faster than
+ *     FLASH_MIN_TRANSITION_MS of wall-clock time (clampLuminanceStep);
+ *   - the FIRST traversal of the beat displays IN FULL (rise and decay --
+ *     the old guard cut the flash off mid-rise, which is why the shot
+ *     rendered black at its own peak);
+ *   - after one complete display (rise past FLASH_PEAK_FRACTION of target,
+ *     decay below FLASH_SPENT_LUMINANCE) the flash is suppressed until
+ *     progress returns home below FLASH_REARM_PROGRESS -- oscillating
+ *     around the beat cannot strobe.
+ */
+/** A lit flash frozen in place (progress stationary inside the beat) starts
+ * decaying in wall-clock after this long -- muzzle light dies even if the
+ * scrubbed frame does not move (photographic realism + no stuck white wash). */
+const FLASH_HOLD_MS = 250;
+
+export class FlashGuard {
+  private luminance = 0;
+  private armed = true;
+  private peaked = false;
+  private holdMs = 0;
+  private lastProgress = -1;
+
+  /** Advance one frame: `target` is the scene's raw flash luminance for this
+   * progress, `dtMs` the wall-clock time since the previous step. Returns the
+   * displayed (guarded) luminance. */
+  step(target: number, progress: number, dtMs: number): number {
+    if (progress < FLASH_REARM_PROGRESS) {
+      this.armed = true;
+      this.peaked = false;
+    }
+    const stationary = Math.abs(progress - this.lastProgress) < 1e-4;
+    this.lastProgress = progress;
+    if (this.peaked && stationary && this.luminance > FLASH_SPENT_LUMINANCE) {
+      this.holdMs += Math.max(0, dtMs);
+    } else {
+      this.holdMs = 0;
+    }
+    let allowed = this.armed ? Math.max(0, target) : 0;
+    if (this.holdMs > FLASH_HOLD_MS) allowed = 0; // frozen frame: light dies.
+    this.luminance = clampLuminanceStep(this.luminance, allowed, dtMs);
+    if (this.armed) {
+      if (target > 0.1 && this.luminance >= target * FLASH_PEAK_FRACTION) {
+        this.peaked = true;
+      } else if (this.peaked && this.luminance < FLASH_SPENT_LUMINANCE) {
+        this.armed = false;
+      }
+    }
+    return this.luminance;
+  }
+
+  /** True when no decay is pending (rendering again would not change pixels). */
+  settled(target: number): boolean {
+    if (this.luminance > FLASH_SPENT_LUMINANCE && this.peaked) return false;
+    const allowed = this.armed ? Math.max(0, target) : 0;
+    return Math.abs(this.luminance - allowed) < 1e-4;
+  }
+
+  reset(): void {
+    this.luminance = 0;
+    this.armed = true;
+    this.peaked = false;
+    this.holdMs = 0;
+    this.lastProgress = -1;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Off-frame origin (Revision 2). The shot comes from ONE consistent point
 // just outside a single edge of the hero -- NO weapon is ever drawn. Every

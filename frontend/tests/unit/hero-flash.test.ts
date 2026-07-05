@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   flashEnvelope,
   clampLuminanceStep,
+  FlashGuard,
   FLASH_MIN_TRANSITION_MS,
+  FLASH_REARM_PROGRESS,
   SHOT_MOMENT,
 } from "../../src/hero/timeline";
 import {
@@ -109,5 +111,84 @@ describe("hero/sources/simulated.ts sceneParams (field continuity regression)", 
     const after = sceneParams(SHOT_MOMENT + 0.15, "exposure").exposure;
     expect(at).toBeGreaterThan(before);
     expect(at).toBeGreaterThan(after);
+  });
+});
+
+// Regression for the "black flash" bug: the old guard latched "already
+// flashed" the instant displayed luminance crossed 0.25 mid-rise, then zeroed
+// its own target -- the flash suppressed itself before ever peaking, so the
+// shot rendered a pure black frame at SHOT_MOMENT. FlashGuard must let the
+// FIRST traversal of the beat display in full, then block re-entry strobing.
+
+/** Drive the guard through a slow forward sweep at 60fps; return the peak
+ * displayed luminance and the guard (for further stepping). */
+function sweepForward(guard: FlashGuard, from: number, to: number, steps: number) {
+  let peak = 0;
+  for (let i = 0; i <= steps; i++) {
+    const p = from + ((to - from) * i) / steps;
+    const target = Math.max(
+      sceneParams(p, "exposure").exposure,
+      sceneParams(p, "exposure").bloom * 0.7,
+    );
+    peak = Math.max(peak, guard.step(target, p, 16.7));
+  }
+  return peak;
+}
+
+describe("hero/timeline.ts FlashGuard (one full flash per cycle)", () => {
+  it("displays the first beat at (near) full amplitude -- no self-suppression", () => {
+    const guard = new FlashGuard();
+    const rawPeak = Math.max(
+      sceneParams(SHOT_MOMENT, "exposure").exposure,
+      sceneParams(SHOT_MOMENT, "exposure").bloom * 0.7,
+    );
+    // ~3s sweep 0 -> 0.4: slow enough that the rate clamp never binds.
+    const peak = sweepForward(guard, 0, 0.4, 180);
+    expect(peak).toBeGreaterThan(rawPeak * 0.95);
+  });
+
+  it("suppresses a second rise when progress oscillates around the beat", () => {
+    const guard = new FlashGuard();
+    sweepForward(guard, 0, 0.45, 180); // full first traversal, flash spent.
+    // Oscillate back and forth across the beat WITHOUT going home.
+    let second = 0;
+    for (let i = 0; i < 240; i++) {
+      const p = 0.3 + 0.15 * Math.sin(i / 8); // 0.15 .. 0.45, through the beat.
+      const target = Math.max(
+        sceneParams(p, "exposure").exposure,
+        sceneParams(p, "exposure").bloom * 0.7,
+      );
+      second = Math.max(second, guard.step(target, p, 16.7));
+    }
+    expect(second).toBeLessThan(0.06);
+  });
+
+  it("re-arms once progress returns home below FLASH_REARM_PROGRESS", () => {
+    const guard = new FlashGuard();
+    sweepForward(guard, 0, 0.45, 180); // spend the flash.
+    sweepForward(guard, 0.45, 0, 180); // settle home (re-arms below the mark).
+    expect(FLASH_REARM_PROGRESS).toBeLessThan(SHOT_MOMENT);
+    const peak = sweepForward(guard, 0, 0.4, 180); // second engagement.
+    expect(peak).toBeGreaterThan(0.5);
+  });
+
+  it("never exceeds the wall-clock rate clamp, even under a hard progress cut", () => {
+    const guard = new FlashGuard();
+    let prev = guard.step(0, 0, 16.7);
+    // Teleport straight to the beat: displayed rise is still rate-clamped.
+    for (let i = 0; i < 30; i++) {
+      const lum = guard.step(1, SHOT_MOMENT, 16.7);
+      expect(Math.abs(lum - prev)).toBeLessThanOrEqual(16.7 / FLASH_MIN_TRANSITION_MS + 1e-9);
+      prev = lum;
+    }
+  });
+
+  it("lets a flash frozen mid-beat die out in wall-clock time (no stuck wash)", () => {
+    const guard = new FlashGuard();
+    // Rise to the peak, then hold progress exactly at the beat.
+    for (let i = 0; i < 60; i++) guard.step(1, SHOT_MOMENT, 16.7);
+    let lum = 1;
+    for (let i = 0; i < 120; i++) lum = guard.step(1, SHOT_MOMENT, 16.7); // ~2s hold.
+    expect(lum).toBeLessThan(0.06);
   });
 });

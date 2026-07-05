@@ -31,7 +31,7 @@ import {
   ORIGIN_FX,
   ORIGIN_FY,
   flashEnvelope,
-  clampLuminanceStep,
+  FlashGuard,
 } from "../timeline";
 
 const BLACK = "#000000";
@@ -157,15 +157,14 @@ export class SimulatedSource implements ScrubSource {
   private vignetteGrad: CanvasGradient | null = null;
   private grainTile: CanvasPattern | null = null;
 
-  // --- WCAG 2.3.1 flash guard state (the one deliberately stateful bit) ---
-  /** Displayed (rate-clamped) flash luminance carried between renders. */
-  private dispFlash = 0;
+  // --- WCAG 2.3.1 flash guard (the one deliberately stateful bit) ---
+  /** Rate-clamps + one-per-cycle-latches the displayed flash luminance. */
+  private readonly guard = new FlashGuard();
   /** Wall-clock time of the previous render (ms), or null before the first. */
   private lastTimeMs: number | null = null;
-  /** True while the flash is "armed" (progress is below the reset point). */
-  private armed = true;
-  /** True once the single per-cycle flash has fired (blocks a second). */
-  private flashed = false;
+  /** Last rendered progress + guard settledness, for the quiescence check. */
+  private lastProgress = -1;
+  private lastSettled = false;
 
   constructor(variant: FlashVariant = DEFAULT_FLASH_VARIANT) {
     this.variant = variant;
@@ -244,11 +243,17 @@ export class SimulatedSource implements ScrubSource {
 
       this.grainTile = this.buildGrain(ctx);
     }
-    this.dispFlash = 0;
+    this.guard.reset();
     this.lastTimeMs = null;
-    this.armed = true;
-    this.flashed = false;
+    this.lastProgress = -1;
+    this.lastSettled = false;
     return Promise.resolve();
+  }
+
+  /** True when re-rendering the same progress would repaint identical pixels
+   * (no guard decay pending) -- lets the composition skip idle frames. */
+  isQuiescent(progress: number): boolean {
+    return this.lastSettled && Math.abs(progress - this.lastProgress) < 1e-5;
   }
 
   render(progress: number): void {
@@ -265,23 +270,15 @@ export class SimulatedSource implements ScrubSource {
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
     const dt = this.lastTimeMs === null ? 0 : now - this.lastTimeMs;
     this.lastTimeMs = now;
-    // Re-arm whenever progress drops back near home (a new engagement cycle).
-    if (p < SHOT_MOMENT * 0.4) {
-      this.armed = true;
-      this.flashed = false;
-    }
-    // Representative flash luminance; suppressed if we already flashed this cycle
-    // (blocks a second flash under jittery back-and-forth around the beat).
-    let targetFlash = Math.max(s.exposure, s.bloom * 0.7);
-    if (this.flashed && !this.armed) targetFlash = 0;
-    this.dispFlash = clampLuminanceStep(this.dispFlash, targetFlash, dt);
-    if (this.armed && this.dispFlash > 0.25) {
-      this.flashed = true;
-      this.armed = false;
-    }
+    // Representative flash luminance; the guard rate-clamps it and lets the
+    // FIRST full beat display (rise AND decay) before latching one-per-cycle.
+    const targetFlash = Math.max(s.exposure, s.bloom * 0.7);
+    const dispFlash = this.guard.step(targetFlash, p, dt);
+    this.lastProgress = p;
+    this.lastSettled = this.guard.settled(targetFlash);
     // Scale every bright flash layer by the clamped/target ratio so the guard
     // governs bloom + rim together, not just the white wash.
-    const flashScale = targetFlash > 1e-4 ? clamp01(this.dispFlash / targetFlash) : 0;
+    const flashScale = targetFlash > 1e-4 ? clamp01(dispFlash / targetFlash) : 0;
 
     // --- black field --------------------------------------------------------
     ctx.setTransform(1, 0, 0, 1, 0, 0);

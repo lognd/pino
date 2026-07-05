@@ -208,7 +208,11 @@ export function Hero() {
       // canvas backing store to whatever box results. Taller aspect below
       // sm: the stacked two-row "MEL / PINO" mobile wordmark (Wordmark.tsx's
       // `stacked` prop) needs vertical room the wide 8/3 box doesn't give it.
-      className="relative aspect-[3/4] max-h-[85svh] w-full overflow-hidden bg-mp-black-true sm:aspect-[8/3]"
+      // Desktop widened from 8/3 to 16/9 once the nav started floating OVER
+      // the hero (Shell.tsx) instead of reserving its own bar above it --
+      // the hero no longer gets that ~80px pushed into it, so it needs more
+      // height of its own to still read as a full hero band, not a strip.
+      className="relative aspect-[3/4] max-h-[85svh] w-full overflow-hidden bg-mp-black-true sm:aspect-[16/9]"
       aria-hidden="true"
     >
       {/* Poster: the backdrop that paints first and the reduced-motion /

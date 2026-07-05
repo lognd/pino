@@ -202,7 +202,10 @@ export function Hero() {
   return (
     <div
       ref={containerRef}
-      className="relative aspect-[8/3] w-full overflow-hidden bg-mp-black-true"
+      // max-h caps the 8/3 box on short/ultrawide viewports so the hero
+      // never swallows the whole first screen; the ResizeObserver re-sizes
+      // the canvas backing store to whatever box results.
+      className="relative aspect-[8/3] max-h-[85svh] w-full overflow-hidden bg-mp-black-true"
       aria-hidden="true"
     >
       {/* Poster: the backdrop that paints first and the reduced-motion /

@@ -3,7 +3,16 @@
 // links, red "Book a class" CTA), footer with legal links + business legal
 // name + SAMPLE physical address (CAN-SPAM note, doc 06). All copy from
 // content/mock.ts; business name from lib/brand.ts.
+//
+// RESPONSIVE NAV (user feedback 2026-07-05): below lg the link row is
+// flattened into a single MENU button that expands into a stacked panel
+// (Courses/Gallery/About/Contact + the red CTA) -- no wrapped/overlapping
+// links at narrow widths, ever. Plain "MENU"/"CLOSE" text instead of a
+// hamburger glyph: the audience is elderly (doc 00), words beat icons.
+// Disclosure semantics (aria-expanded/aria-controls), Escape closes, route
+// change closes, every item is a >= 48px tap target.
 
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { businessLegalName, businessShortName } from "../../lib/brand";
@@ -12,6 +21,22 @@ import { useBulletholeClicks } from "../../hero/useBulletholeClicks";
 
 const NAV_LINK =
   "text-lg font-semibold text-mp-white underline-offset-4 hover:underline";
+
+// text-xl (20px) + font-bold is required, not decorative: white-on-mp-red
+// only measures 4.19:1 (below the 4.5:1 AA gate for normal-size text), so
+// this pairing is only compliant at WCAG "large text" size (>= 18.66px
+// bold); text-lg (18px) fell just short and tripped axe color-contrast
+// (doc 09's "check every new pairing").
+const CTA_LINK =
+  "inline-block min-h-[48px] bg-mp-red px-4 py-2 text-xl font-bold uppercase text-mp-white hover:bg-mp-red-press";
+
+/** The four plain nav items, one source for both layouts (NO DUPLICATION). */
+const NAV_ITEMS = [
+  CONTENT.nav.courses,
+  CONTENT.nav.gallery,
+  CONTENT.nav.about,
+  CONTENT.nav.contact,
+];
 
 export function Shell({ children }: { children: ReactNode }) {
   const year = new Date().getFullYear();
@@ -23,13 +48,30 @@ export function Shell({ children }: { children: ReactNode }) {
   // MEL PINO wordmark logo at the VERY LEFT, shown on every page EXCEPT the
   // landing route (where the hero already owns the lockup -- no duplicate
   // logo in the bar there). The plain-text "Home" nav item is removed.
-  const onLanding = useLocation().pathname === CONTENT.nav.home.path;
+  const location = useLocation();
+  const onLanding = location.pathname === CONTENT.nav.home.path;
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Route change closes the expanded menu (navigation happened).
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+  // Escape closes it (standard disclosure behavior).
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
+
   return (
     <div className="flex min-h-screen flex-col bg-mp-black text-mp-white">
       <header className="border-b-2 border-mp-border px-4 py-4">
         <nav
           aria-label="Primary"
-          className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4"
+          className="mx-auto flex max-w-6xl items-center justify-between gap-4"
         >
           {/* Wordmark-logo home link -- shown on every page except landing
               (doc 09's revised backlink rule). A spacer keeps the nav links
@@ -37,65 +79,77 @@ export function Shell({ children }: { children: ReactNode }) {
           {onLanding ? (
             <span aria-hidden="true" />
           ) : (
-            <Link to={CONTENT.nav.home.path} className="flex items-center gap-2" {...bulletProps}>
-              <img src="/brand/wordmark.svg" alt="" className="h-10 w-auto" />
+            <Link
+              to={CONTENT.nav.home.path}
+              className="flex min-w-0 items-center gap-2"
+              {...bulletProps}
+            >
+              {/* aspect-[8/3] + h-10, NOT w-auto: Chromium reports zero
+                  intrinsic size for SVG <img>s here, and w-auto collapsed
+                  the logo to 0px (invisible nav logo bug). */}
+              <img src="/brand/wordmark.svg" alt="" className="aspect-[8/3] h-10" />
               <span className="sr-only">{businessShortName} -- home</span>
             </Link>
           )}
-          <ul className="flex flex-wrap items-center gap-6">
+
+          {/* Full link row: lg and up only (it wraps/overlaps below that). */}
+          <ul className="hidden items-center gap-6 lg:flex">
+            {NAV_ITEMS.map((item) => (
+              <li key={item.path}>
+                <Link to={item.path} className={NAV_LINK} {...bulletProps}>
+                  {item.label}
+                </Link>
+              </li>
+            ))}
             <li>
-              <Link
-                to={CONTENT.nav.courses.path}
-                className={NAV_LINK}
-                {...bulletProps}
-              >
-                {CONTENT.nav.courses.label}
+              <Link to={CONTENT.nav.book.path} className={CTA_LINK} {...bulletProps}>
+                {CONTENT.nav.book.label}
               </Link>
             </li>
-            <li>
-              <Link
-                to={CONTENT.nav.gallery.path}
-                className={NAV_LINK}
-                {...bulletProps}
-              >
-                {CONTENT.nav.gallery.label}
-              </Link>
-            </li>
-            <li>
-              <Link
-                to={CONTENT.nav.about.path}
-                className={NAV_LINK}
-                {...bulletProps}
-              >
-                {CONTENT.nav.about.label}
-              </Link>
-            </li>
-            <li>
-              <Link
-                to={CONTENT.nav.contact.path}
-                className={NAV_LINK}
-                {...bulletProps}
-              >
-                {CONTENT.nav.contact.label}
-              </Link>
-            </li>
-            <li>
+          </ul>
+
+          {/* Flattened menu button: below lg every option lives in the
+              expanding panel underneath, so nothing can overlap. */}
+          <button
+            type="button"
+            className="min-h-[48px] border-2 border-mp-border px-5 py-2 text-xl font-bold uppercase text-mp-white hover:border-mp-white lg:hidden"
+            aria-expanded={menuOpen}
+            aria-controls="mp-nav-menu"
+            onClick={() => setMenuOpen((v) => !v)}
+            {...bulletProps}
+          >
+            {menuOpen ? "Close" : "Menu"}
+          </button>
+        </nav>
+
+        {/* Expanded mobile panel: stacked, full-width, >=48px tap targets. */}
+        <div
+          id="mp-nav-menu"
+          className={`${menuOpen ? "block" : "hidden"} lg:hidden`}
+        >
+          <ul className="mx-auto mt-4 flex max-w-6xl flex-col border-t-2 border-mp-border pt-2">
+            {NAV_ITEMS.map((item) => (
+              <li key={item.path}>
+                <Link
+                  to={item.path}
+                  className={`${NAV_LINK} block min-h-[48px] py-3`}
+                  {...bulletProps}
+                >
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+            <li className="pt-2">
               <Link
                 to={CONTENT.nav.book.path}
-                // text-xl (20px) + font-bold is required, not decorative:
-                // white-on-mp-red only measures 4.19:1 (below the 4.5:1
-                // AA gate for normal-size text), so this pairing is only
-                // compliant at WCAG "large text" size (>= 18.66px bold);
-                // text-lg (18px) fell just short and tripped axe
-                // color-contrast (doc 09's "check every new pairing").
-                className="inline-block min-h-[48px] bg-mp-red px-4 py-2 text-xl font-bold uppercase text-mp-white hover:bg-mp-red-press"
+                className={`${CTA_LINK} w-full text-center`}
                 {...bulletProps}
               >
                 {CONTENT.nav.book.label}
               </Link>
             </li>
           </ul>
-        </nav>
+        </div>
       </header>
 
       <main className="flex-1">{children}</main>

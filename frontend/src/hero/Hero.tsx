@@ -30,14 +30,18 @@ type HeroMode = "poster" | "live";
 export function Hero() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wordmarkRef = useRef<HTMLDivElement>(null);
   const sourceRef = useRef<ScrubSource | null>(null);
   const [mode, setMode] = useState<HeroMode>("poster");
   const [reduced] = useState<boolean>(prefersReducedMotion);
   const [touch] = useState<boolean>(isTouchDevice);
 
+  // Revision 4: the wordmark element feeds break-on-reach -- the pointer/touch
+  // first entering its bounds fires the shot (useScrub raises the hit signal).
   const scrub = useScrub(containerRef, {
     enabled: mode === "live" && !reduced,
     touch,
+    wordmarkRef,
   });
 
   // Lazy source init behind requestIdleCallback so Landing LCP (the poster)
@@ -145,7 +149,9 @@ export function Hero() {
           overlay the live, fracturing wordmark. */}
       {showLiveCanvas && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <Wordmark progress={scrub.progress} className="w-3/4 max-w-3xl" />
+          <div ref={wordmarkRef} className="w-3/4 max-w-3xl">
+            <Wordmark progress={scrub.progress} className="w-full" />
+          </div>
         </div>
       )}
     </div>

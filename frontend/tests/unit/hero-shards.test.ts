@@ -9,16 +9,16 @@ import {
 } from "../../src/hero/shards";
 import { SHOT_MOMENT } from "../../src/hero/timeline";
 
-// docs/design/08-landing-hero.md (Revision 3) shard obligations: purity, the
-// NEW held shatter envelope (0 until SHOT_MOMENT, monotone-rising to a FULL,
-// HELD 1 at p = 1, identity only at p = 0), the branched/fractal crack network
-// (kinked primaries with secondary/tertiary branches), fragments tiling the
-// field, and each fragment displacing ALONG its radial vector from the impact.
+// docs/design/08-landing-hero.md (Revision 3/4) shard obligations: purity, the
+// held shatter envelope (0 until SHOT_MOMENT, monotone-rising to a FULL, HELD 1
+// at p = 1, identity only at p = 0), the branched/fractal kinked tessellation,
+// fragments tiling the field, and each fragment displacing ALONG its radial
+// vector from the impact. Revision 4 removed the rendered crack-line overlay, so
+// buildShards no longer emits a crack list.
 
 const built = buildShards();
 const IMPACT = built.impact;
 const SHARDS: Shard[] = built.shards;
-const CRACKS = built.cracks;
 
 const magOf = (t: { tx: number; ty: number }) => Math.hypot(t.tx, t.ty);
 
@@ -68,45 +68,7 @@ describe("hero/shards.ts buildShards (branched-crack tessellation)", () => {
   it("is deterministic: the same seed rebuilds identical geometry", () => {
     const again = buildShards();
     expect(again.shards.length).toBe(SHARDS.length);
-    expect(again.cracks.length).toBe(CRACKS.length);
     expect(again.shards[3].points).toEqual(SHARDS[3].points);
-  });
-});
-
-describe("hero/shards.ts crack network (branchy + fractal)", () => {
-  const primaries = CRACKS.filter((c) => c.generation === 1);
-  const secondaries = CRACKS.filter((c) => c.generation === 2);
-  const tertiaries = CRACKS.filter((c) => c.generation === 3);
-
-  it("emits primary cracks as KINKED polylines of 3-6 segments (never a straight line)", () => {
-    expect(primaries.length).toBeGreaterThanOrEqual(12);
-    for (const c of primaries) {
-      // 3-6 segments -> 4-7 vertices.
-      expect(c.points.length).toBeGreaterThanOrEqual(4);
-      expect(c.points.length).toBeLessThanOrEqual(7);
-      // Not collinear: at least one interior vertex bends the line.
-      const a = c.points[0];
-      const b = c.points[c.points.length - 1];
-      let maxCross = 0;
-      for (const p of c.points) {
-        const cross = Math.abs((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x));
-        maxCross = Math.max(maxCross, cross);
-      }
-      expect(maxCross).toBeGreaterThan(1); // genuinely kinked, not a chord.
-    }
-  });
-
-  it("spawns 1-3 secondary branches per primary and some tertiaries near impact", () => {
-    expect(secondaries.length).toBeGreaterThanOrEqual(primaries.length);
-    expect(secondaries.length).toBeLessThanOrEqual(primaries.length * 3);
-    expect(tertiaries.length).toBeGreaterThan(0);
-  });
-
-  it("marks near-impact cracks as brighter (higher intensity)", () => {
-    for (const c of CRACKS) {
-      expect(c.intensity).toBeGreaterThanOrEqual(0);
-      expect(c.intensity).toBeLessThanOrEqual(1);
-    }
   });
 });
 

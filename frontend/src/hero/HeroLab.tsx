@@ -1,46 +1,59 @@
-// /hero-lab dev playground -- docs/design/08-landing-hero.md (Revision 2).
+// /hero-lab dev playground -- docs/design/08-landing-hero.md (Revision 4).
 //
-// Self-contained (route registration is App.tsx's job, not this file). It
-// drives a source + the reactive Wordmark directly so the scrub, the settle-
-// home drift, the manual override, the source swap, the fps guard, and the
-// NEW Revision-2 tunables (active-band inset, settle duration, impact point)
-// can all be inspected and tuned in isolation. It also hosts a bullet-hole
-// test area. It intentionally does NOT reuse <Hero/>: the lab needs to reach
-// inside the progress signal (override it, read fps) in a way the production
-// component deliberately hides.
+// Self-contained (route registration is App.tsx's job). It drives a source + the
+// reactive Wordmark directly so the activity-driven scrub, the settle-home
+// drift, the manual progress override, the source swap, the fps guard, the
+// impact point, and -- Revision 4 -- the SELECTABLE FLASH VARIANTS can all be
+// inspected and tuned in isolation. It also hosts the bullet-hole test area and
+// wires the wordmark bounds for break-on-reach. It intentionally does NOT reuse
+// <Hero/>: the lab reaches inside the progress signal (override it, read fps).
 
 import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "./Wordmark";
 import { useScrub } from "./useScrub";
 import { useBulletholeClicks } from "./useBulletholeClicks";
-import { DEFAULT_BAND_INSET, DEFAULT_SETTLE_MS } from "./scrubMachine";
+import { DEFAULT_SETTLE_MS } from "./scrubMachine";
 import { DEFAULT_IMPACT_FX, DEFAULT_IMPACT_FY } from "./shards";
+import { SHOT_MOMENT } from "./timeline";
 import type { ScrubSource } from "./timeline";
 import {
   createHeroSource,
   resolveHeroSourceKind,
   type HeroSourceKind,
 } from "./sources/select";
+import {
+  FLASH_VARIANTS,
+  DEFAULT_FLASH_VARIANT,
+  type FlashVariant,
+} from "./sources/simulated";
+
+/** A source that also exposes the selectable flash variant (SimulatedSource). */
+function hasVariant(s: ScrubSource): s is ScrubSource & {
+  setVariant(v: FlashVariant): void;
+} {
+  return typeof (s as { setVariant?: unknown }).setVariant === "function";
+}
 
 export function HeroLab() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wordmarkRef = useRef<HTMLDivElement>(null);
   const sourceRef = useRef<ScrubSource | null>(null);
 
   const [sourceKind, setSourceKind] = useState<HeroSourceKind>(() =>
     resolveHeroSourceKind(import.meta.env.VITE_HERO_SOURCE),
   );
   const [override, setOverride] = useState(false);
-  const [manual, setManual] = useState(0.35);
+  const [manual, setManual] = useState(SHOT_MOMENT);
   const [status, setStatus] = useState("initializing");
 
-  // Revision-2 tunables.
-  const [bandInset, setBandInset] = useState(DEFAULT_BAND_INSET);
+  // Revision 4 tunables.
   const [settleMs, setSettleMs] = useState(DEFAULT_SETTLE_MS);
   const [impactFx, setImpactFx] = useState(DEFAULT_IMPACT_FX);
   const [impactFy, setImpactFy] = useState(DEFAULT_IMPACT_FY);
+  const [variant, setVariant] = useState<FlashVariant>(DEFAULT_FLASH_VARIANT);
 
-  const scrub = useScrub(containerRef, { enabled: !override, bandInset, settleMs });
+  const scrub = useScrub(containerRef, { enabled: !override, settleMs, wordmarkRef });
   const progress = override ? manual : scrub.progress;
 
   const bullets = useBulletholeClicks();
@@ -68,6 +81,7 @@ export function HeroLab() {
           source.dispose();
           return;
         }
+        if (hasVariant(source)) source.setVariant(variant);
         sourceRef.current = source;
         source.render(0);
         setStatus(`live: ${sourceKind}`);
@@ -79,7 +93,19 @@ export function HeroLab() {
     return () => {
       cancelled = true;
     };
+    // Variant is applied here on (re)load and separately below on change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceKind]);
+
+  // Apply a flash-variant change to the live source and repaint immediately.
+  useEffect(() => {
+    const source = sourceRef.current;
+    if (source && hasVariant(source)) {
+      source.setVariant(variant);
+      source.render(progress);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variant]);
 
   // Redraw on every progress change (pointer, settle, or manual override).
   useEffect(() => {
@@ -117,12 +143,14 @@ export function HeroLab() {
             pointerEvents: "none",
           }}
         >
-          <Wordmark
-            progress={progress}
-            impactFx={impactFx}
-            impactFy={impactFy}
-            className="hero-lab-wordmark"
-          />
+          <div ref={wordmarkRef} style={{ width: "75%", maxWidth: 768 }}>
+            <Wordmark
+              progress={progress}
+              impactFx={impactFx}
+              impactFy={impactFy}
+              className="hero-lab-wordmark"
+            />
+          </div>
         </div>
       </div>
 
@@ -140,6 +168,7 @@ export function HeroLab() {
         <div>
           mode: {override ? "manual override" : scrub.isSettling ? "settle-home" : scrub.mode}
         </div>
+        <div>energy: {scrub.energy.toFixed(3)}</div>
         <div>
           fps: {scrub.fps.toFixed(1)} {scrub.lowPower ? "(LOW POWER)" : ""}
         </div>
@@ -152,6 +181,18 @@ export function HeroLab() {
           >
             <option value="simulated">simulated</option>
             <option value="video">video (stub)</option>
+          </select>
+        </label>
+
+        <label style={row}>
+          flash variant:
+          <select value={variant} onChange={(e) => setVariant(e.target.value as FlashVariant)}>
+            {FLASH_VARIANTS.map((v) => (
+              <option key={v} value={v}>
+                {v}
+                {v === DEFAULT_FLASH_VARIANT ? " (default)" : ""}
+              </option>
+            ))}
           </select>
         </label>
 
@@ -179,21 +220,7 @@ export function HeroLab() {
         </label>
 
         <hr style={{ borderColor: "#333", width: "100%" }} />
-        <div style={{ opacity: 0.7 }}>-- Revision 2 tunables --</div>
-
-        <label style={row}>
-          band inset (min 0.15):
-          <input
-            type="range"
-            min={0.15}
-            max={0.4}
-            step={0.005}
-            value={bandInset}
-            onChange={(e) => setBandInset(Number(e.target.value))}
-            style={{ flex: 1 }}
-          />
-          {bandInset.toFixed(3)}
-        </label>
+        <div style={{ opacity: 0.7 }}>-- Revision 4 tunables --</div>
 
         <label style={row}>
           settle ms (4000-6000):

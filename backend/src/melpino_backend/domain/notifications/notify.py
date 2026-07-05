@@ -268,6 +268,13 @@ async def send_due_reminders(db: "AsyncSession", cfg: "AppConfig") -> int:
                 content_text=text,
             )
             await _record_sent(db, booking.id, "reminder")
+            # FINDINGS.md L2: commit the idempotency ledger row right
+            # after the send it guards, instead of leaving it to only a
+            # flush -- otherwise a later failure elsewhere in the sweep
+            # (after this send, before the caller's final commit) rolls
+            # back this row while the email has already gone out,
+            # causing a duplicate resend tomorrow.
+            await db.commit()
             sent += 1
             _log.info("sent reminder email booking_id=%s", booking.id)
         except Exception as exc:

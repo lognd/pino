@@ -212,6 +212,16 @@ async def cancel_session(
         len(invoice_ids),
         flagged_paid_invoice_count,
     )
+    # Commit before sending the cancellation emails (see FINDINGS.md M1):
+    # mirrors domain/booking/service.py's create_booking/cancel_booking
+    # commit-before-notify fix. Without this, a failed end-of-request
+    # commit rolls back the session flip, the bulk booking cancellation,
+    # and the invoice void/needs-review writes while guests have already
+    # been told by email that they're cancelled -- they aren't, and could
+    # still be charged a deposit for a class that will never run.
+    # get_db()'s own end-of-request commit becomes a no-op on top of this.
+    await db.commit()
+
     # Cascade cancellation emails to every booking that WAS confirmed on
     # this session -- best-effort, never fails the cancel itself (see
     # notify.py's swallow-and-log rule). Notified directly off the

@@ -175,15 +175,14 @@ async def _handle_payment_intent_event(
         settled_now = succeeded and await settle_invoice_if_paid(db, invoice)
         if succeeded:
             await _flag_if_already_covered(db, invoice)
-        if succeeded and invoice.status == "paid":
-            if settled_now:
-                _log.info(
-                    "invoice marked paid via stripe (retried intent)",
-                    extra={
-                        "invoice_id": str(invoice.id),
-                        "stripe_payment_intent_id": intent_id,
-                    },
-                )
+        if succeeded and invoice.status == "paid" and settled_now:
+            _log.info(
+                "invoice marked paid via stripe (retried intent)",
+                extra={
+                    "invoice_id": str(invoice.id),
+                    "stripe_payment_intent_id": intent_id,
+                },
+            )
             # Capture what the email needs BEFORE commit -- commit()
             # expires every attribute on `invoice`/`existing`, and a bare
             # (unawaited) attribute access afterward would try to
@@ -193,6 +192,8 @@ async def _handle_payment_intent_event(
             # Release the invoice row lock before the email send.
             await db.commit()
             await notify_payment_received(db, cfg, invoice, paid_amount)
+            return
+        await db.commit()
         return
 
     try:

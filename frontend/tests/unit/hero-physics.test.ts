@@ -142,3 +142,52 @@ describe("hero/piecePhysics.ts (Revision 7 baby sim)", () => {
     expect([...a.vy]).toEqual([...b.vy]);
   });
 });
+
+describe("hero/piecePhysics.ts homing (no reassembly jump)", () => {
+  it("contracts offsets to ~0 by the time separation ends on a settle", () => {
+    const s = freshState();
+    const { bx, by } = basePositions();
+    // Bump hard: cursor parked in the cluster at full shatter for 2s.
+    for (let t = 0; t < 2000; t += 16.7) {
+      stepPiecePhysics(s, PIECES, bx, by, {
+        dtMs: 16.7,
+        shatter: 1,
+        pointerX: bx[0] - 8,
+        pointerY: by[0],
+      });
+    }
+    expect(maxOffsetMag(s)).toBeGreaterThan(1);
+    // Settle tail: shatter eases 1 -> 0 like the real ease-out (slow tail),
+    // ~2.5s total, sampled at 60fps.
+    const steps = 150;
+    for (let i = 1; i <= steps; i++) {
+      const x = i / steps;
+      const inv = 1 - x;
+      const shatter = inv * inv * inv; // slow-ending decay like the settle tail
+      stepPiecePhysics(s, PIECES, bx, by, {
+        dtMs: 16.7,
+        shatter,
+        pointerX: null,
+        pointerY: null,
+      });
+      if (shatter < 0.005) break;
+    }
+    // Just before separation fully ends, the float offset is already tiny.
+    expect(maxOffsetMag(s)).toBeLessThan(1);
+  });
+
+  it("keeps the instant float on the way OUT (low shatter, rising)", () => {
+    const s = freshState();
+    const { bx, by } = basePositions();
+    // Rise slowly through the same low shatter values homing uses.
+    for (let i = 0; i < 30; i++) {
+      stepPiecePhysics(s, PIECES, bx, by, {
+        dtMs: 16.7,
+        shatter: 0.02 + (i / 30) * 0.1,
+        pointerX: null,
+        pointerY: null,
+      });
+    }
+    expect(maxOffsetMag(s)).toBeGreaterThan(0.2); // float alive, not homed away
+  });
+});

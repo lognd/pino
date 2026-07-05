@@ -32,6 +32,7 @@ import {
   ORIGIN_FY,
   flashEnvelope,
   FlashGuard,
+  SmokePass,
 } from "../timeline";
 
 const BLACK = "#000000";
@@ -163,6 +164,8 @@ export class SimulatedSource implements ScrubSource {
   // --- WCAG 2.3.1 flash guard (the one deliberately stateful bit) ---
   /** Rate-clamps + one-per-cycle-latches the displayed flash luminance. */
   private readonly guard = new FlashGuard();
+  /** Smoke belongs to the shot: first pass only, fades out on the rewind. */
+  private readonly smokePass = new SmokePass();
   /** Wall-clock time of the previous render (ms), or null before the first. */
   private lastTimeMs: number | null = null;
   /** Last rendered progress + guard settledness, for the quiescence check. */
@@ -250,6 +253,7 @@ export class SimulatedSource implements ScrubSource {
       this.grainTile = this.buildGrain(ctx);
     }
     this.guard.reset();
+    this.smokePass.reset();
     this.lastTimeMs = null;
     this.lastProgress = -1;
     this.lastSettled = false;
@@ -280,8 +284,11 @@ export class SimulatedSource implements ScrubSource {
     // FIRST full beat display (rise AND decay) before latching one-per-cycle.
     const targetFlash = Math.max(s.exposure, s.bloom * 0.7);
     const dispFlash = this.guard.step(targetFlash, p, dt);
+    // Smoke rides the shot: full on the first forward pass, wall-clock fade
+    // the moment the sequence rewinds, back with the next engagement cycle.
+    const smokeScale = this.smokePass.step(p, dt);
     this.lastProgress = p;
-    this.lastSettled = this.guard.settled(targetFlash);
+    this.lastSettled = this.guard.settled(targetFlash) && this.smokePass.settled();
     // Scale every bright flash layer by the clamped/target ratio so the guard
     // governs bloom + rim together, not just the white wash.
     const flashScale = targetFlash > 1e-4 ? clamp01(dispFlash / targetFlash) : 0;
@@ -332,8 +339,8 @@ export class SimulatedSource implements ScrubSource {
     // ellipses (a wide faint body plus a denser core trailing toward the
     // origin) -- round grey puffs read as fog blobs, stretched layers read as
     // gunsmoke. A brief atmospheric glow lifts them during the beat.
-    if (s.smokeAmount > 0.001 && this.smokeGrad) {
-      const glow = s.smokeGlow * flashScale;
+    if (s.smokeAmount * smokeScale > 0.001 && this.smokeGrad) {
+      const glow = s.smokeGlow * flashScale * smokeScale;
       for (let i = 0; i < SMOKE_COUNT; i++) {
         const travel = s.smokeTravel * (0.5 + this.smokePhase[i] * 0.5);
         const a = this.smokeAngle[i];
@@ -342,7 +349,7 @@ export class SimulatedSource implements ScrubSource {
         const sy = originY + Math.sin(a) * dist;
         const r = h * (0.09 + 0.3 * travel);
         const life = Math.sin(Math.PI * clamp01(travel));
-        const alpha = s.smokeAmount * life * (0.35 + 0.4 * this.smokePhase[i]);
+        const alpha = s.smokeAmount * smokeScale * life * (0.35 + 0.4 * this.smokePhase[i]);
         // Near-origin wisps pick up the flash glow briefly.
         const nearOrigin = 1 - clamp01(dist / (w * 0.4));
         const elong = this.smokeElong[i];

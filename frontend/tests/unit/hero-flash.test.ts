@@ -3,6 +3,7 @@ import {
   flashEnvelope,
   clampLuminanceStep,
   FlashGuard,
+  SmokePass,
   FLASH_MIN_TRANSITION_MS,
   FLASH_REARM_PROGRESS,
   SHOT_MOMENT,
@@ -190,5 +191,45 @@ describe("hero/timeline.ts FlashGuard (one full flash per cycle)", () => {
     let lum = 1;
     for (let i = 0; i < 120; i++) lum = guard.step(1, SHOT_MOMENT, 16.7); // ~2s hold.
     expect(lum).toBeLessThan(0.06);
+  });
+});
+
+describe("hero/timeline.ts SmokePass (smoke rides the first pass only)", () => {
+  it("is full through the first forward pass", () => {
+    const smoke = new SmokePass();
+    let scale = 0;
+    for (let p = 0; p <= 1.0001; p += 0.005) scale = smoke.step(p, 16.7);
+    expect(scale).toBe(1);
+  });
+
+  it("fades out in wall-clock once the sequence rewinds, and stays out", () => {
+    const smoke = new SmokePass();
+    for (let p = 0; p <= 1.0001; p += 0.005) smoke.step(p, 16.7);
+    // Rewind (settle) from 1 toward home: fade must complete mid-rewind...
+    let scale = 1;
+    for (let p = 1; p > 0.4; p -= 0.005) scale = smoke.step(p, 16.7);
+    expect(scale).toBe(0);
+    // ...and pushing forward again mid-cycle must NOT bring smoke back.
+    for (let p = 0.4; p <= 0.9; p += 0.005) scale = smoke.step(p, 16.7);
+    expect(scale).toBe(0);
+  });
+
+  it("re-arms for the next engagement once progress returns home", () => {
+    const smoke = new SmokePass();
+    for (let p = 0; p <= 1.0001; p += 0.005) smoke.step(p, 16.7);
+    for (let p = 1; p >= 0; p -= 0.005) smoke.step(p, 16.7); // full settle home
+    let scale = 0;
+    for (let p = 0; p <= 0.6; p += 0.005) scale = smoke.step(p, 16.7);
+    expect(scale).toBe(1);
+  });
+
+  it("ignores small forward jitter (hysteresis, no flicker)", () => {
+    const smoke = new SmokePass();
+    for (let p = 0; p <= 0.7; p += 0.005) smoke.step(p, 16.7);
+    let min = 1;
+    for (let i = 0; i < 120; i++) {
+      min = Math.min(min, smoke.step(0.7 - 0.03 * Math.abs(Math.sin(i / 5)), 16.7));
+    }
+    expect(min).toBe(1); // wiggle within the hysteresis band never fades it
   });
 });

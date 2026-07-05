@@ -45,6 +45,21 @@ const ROT_WOBBLE_DEG = 2;
 /** Integration clamp: a single step never integrates more than this (ms). */
 const MAX_STEP_MS = 50;
 
+// Homing (the "pieces jump" fix): while shatter is FALLING (settle-home),
+// the spring stiffens, damping goes overdamped, wanders die, and offsets
+// contract exponentially -- so by the instant separation ends the float
+// offset is already ~0 and the final snap-to-zero is invisible. Pieces
+// "find their way back" instead of teleporting. Direction-aware on purpose:
+// the same low shatter values on the way OUT must keep the instant float.
+const HOME_START_SHATTER = 0.3;
+const HOME_STIFFEN = 10;
+const HOME_OVERDAMP = 4;
+/** Exponential offset contraction rate at full homing (1/s). */
+const HOME_CONTRACT_RATE = 6;
+/** Smoothing time constant for the homing envelope (s), so direction
+ * flicker from jittery input cannot pump it. */
+const HOME_TAU_S = 0.15;
+
 export interface PiecePhysicsState {
   /** Current float offsets (viewBox units), added to the base transform. */
   readonly ox: Float32Array;
@@ -56,6 +71,10 @@ export interface PiecePhysicsState {
   readonly prevGate: Float32Array;
   /** Accumulated sim time (ms) driving the seeded wander sines. */
   timeMs: number;
+  /** Smoothed homing envelope in [0,1] (1 = fully on the way home). */
+  homing: number;
+  /** Shatter amount of the previous step (homing direction detector). */
+  prevShatter: number;
 }
 
 export interface PiecePhysicsInput {
@@ -77,6 +96,8 @@ export function createPiecePhysics(count: number): PiecePhysicsState {
     vy: new Float32Array(count),
     prevGate: new Float32Array(count),
     timeMs: 0,
+    homing: 0,
+    prevShatter: 0,
   };
 }
 
@@ -115,6 +136,17 @@ export function stepPiecePhysics(
   const px = input.pointerX;
   const py = input.pointerY;
 
+  // Homing envelope: rises only while shatter is falling (reassembling),
+  // smoothed so direction flicker from jittery input cannot pump it.
+  const falling = input.shatter < state.prevShatter - 1e-6;
+  state.prevShatter = input.shatter;
+  const homeTarget = falling ? 1 - clamp01(input.shatter / HOME_START_SHATTER) : 0;
+  state.homing += (homeTarget - state.homing) * (1 - Math.exp(-dt / HOME_TAU_S));
+  const home = state.homing;
+  const k = SPRING_K * (1 + HOME_STIFFEN * home);
+  const c = DAMP_C * (1 + HOME_OVERDAMP * home);
+  const contract = home > 1e-3 ? Math.exp(-home * HOME_CONTRACT_RATE * dt) : 1;
+
   for (let i = 0; i < pieces.length; i++) {
     if (gate <= 0) {
       // Not separated: exact zero so reassembly at progress 0 is identity.
@@ -134,9 +166,11 @@ export function stepPiecePhysics(
     }
     prevGate[i] = gate;
 
-    // Forces: spring home, damping, seeded wander, cursor repulsion.
-    let ax = -SPRING_K * ox[i] - DAMP_C * vx[i] + NOISE_F * gate * wander(seed * 13 + 1, tSec);
-    let ay = -SPRING_K * oy[i] - DAMP_C * vy[i] + NOISE_F * gate * wander(seed * 13 + 5, tSec);
+    // Forces: spring home, damping, seeded wander (silenced while homing),
+    // cursor repulsion.
+    const noiseGate = gate * (1 - home);
+    let ax = -k * ox[i] - c * vx[i] + NOISE_F * noiseGate * wander(seed * 13 + 1, tSec);
+    let ay = -k * oy[i] - c * vy[i] + NOISE_F * noiseGate * wander(seed * 13 + 5, tSec);
     if (px !== null && py !== null) {
       const dx = baseX[i] + ox[i] - px;
       const dy = baseY[i] + oy[i] - py;
@@ -154,5 +188,14 @@ export function stepPiecePhysics(
     vy[i] = Math.max(-MAX_V, Math.min(MAX_V, vy[i] + ay * dt));
     ox[i] = Math.max(-MAX_OFFSET, Math.min(MAX_OFFSET, ox[i] + vx[i] * dt));
     oy[i] = Math.max(-MAX_OFFSET, Math.min(MAX_OFFSET, oy[i] + vy[i] * dt));
+
+    // Contraction guarantee: whatever the forces did, offsets shrink
+    // exponentially while homing so gate-close lands at ~0 (no jump).
+    if (contract < 1) {
+      ox[i] *= contract;
+      oy[i] *= contract;
+      vx[i] *= contract;
+      vy[i] *= contract;
+    }
   }
 }

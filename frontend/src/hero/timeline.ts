@@ -140,6 +140,54 @@ export class FlashGuard {
   }
 }
 
+/** How far progress must fall below its cycle high-water before the smoke
+ * counts as "returning" (hysteresis against forward jitter). */
+const SMOKE_RETURN_DELTA = 0.08;
+/** Wall-clock ms for a full smoke fade (out on return, back in on re-arm). */
+const SMOKE_FADE_MS = 600;
+
+/** One-pass smoke guard (same idea as FlashGuard, gentler physics): smoke
+ * belongs to the SHOT, so it drifts with the first forward pass, FADES OUT
+ * in wall-clock the moment the sequence starts rewinding home (a rewind
+ * would otherwise un-drift it -- fine for real slow-mo footage, wrong for
+ * the simulated scene), stays out for the rest of the cycle, and re-arms
+ * once progress returns home. Stateful by design, wall-clock rate-limited
+ * so no scrub pattern can flicker it. */
+export class SmokePass {
+  private scale = 0;
+  private highWater = 0;
+  private spent = false;
+
+  /** Advance one frame; returns the smoke intensity multiplier in [0,1]. */
+  step(progress: number, dtMs: number): number {
+    const p = clamp01(progress);
+    if (p < FLASH_REARM_PROGRESS) {
+      this.spent = false;
+      this.highWater = p;
+    }
+    this.highWater = Math.max(this.highWater, p);
+    if (p < this.highWater - SMOKE_RETURN_DELTA) this.spent = true;
+    const target = this.spent ? 0 : 1;
+    const maxStep = Math.max(0, dtMs) / SMOKE_FADE_MS;
+    const d = target - this.scale;
+    if (d > maxStep) this.scale += maxStep;
+    else if (d < -maxStep) this.scale -= maxStep;
+    else this.scale = target;
+    return this.scale;
+  }
+
+  /** True when the fade is complete (re-rendering would not change pixels). */
+  settled(): boolean {
+    return this.scale === (this.spent ? 0 : 1);
+  }
+
+  reset(): void {
+    this.scale = 0;
+    this.highWater = 0;
+    this.spent = false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Off-frame origin (Revision 2). The shot comes from ONE consistent point
 // just outside a single edge of the hero -- NO weapon is ever drawn. Every

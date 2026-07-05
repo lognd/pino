@@ -137,6 +137,8 @@ async def cancel_session(
     required notification cascade can actually fire. See mission report.
     """
     from melpino_backend.app.config import AppConfig
+    from melpino_backend.db.models.bookings import Booking
+    from melpino_backend.db.models.invoices import Invoice
     from melpino_backend.domain.notifications import notify
 
     assert isinstance(cfg, AppConfig)
@@ -145,10 +147,64 @@ async def cancel_session(
         logger.info("cancel_session: session_id=%s not found", session_id)
         return Err(CourseError.NotFound)
 
+    # L2 guard: cancelling only makes sense from an active/pre-run state.
+    # An already-cancelled session is a no-op (idempotent double-click);
+    # a completed session must never be flipped back to cancelled --
+    # mirrors publish_session's InvalidState guard above.
+    if session.status == "cancelled":
+        logger.info(
+            "cancel_session: session_id=%s already cancelled; no-op", session_id
+        )
+        return Ok(session)
+    if session.status not in ("draft", "published", "full"):
+        logger.info(
+            "cancel_session: session_id=%s not cancellable (status=%s)",
+            session_id,
+            session.status,
+        )
+        return Err(CourseError.InvalidState)
+
     session.status = "cancelled"
     await db.flush()
-    logger.info("cancel_session: session_id=%s cancelled; notifying", session_id)
-    # Cascade cancellation emails to every confirmed booking -- best-effort,
-    # never fails the cancel itself (see notify.py's swallow-and-log rule).
-    await notify.notify_session_cancelled(db, cfg, session_id)
+
+    # M1: a cancelled session must not leave its bookings 'confirmed' with
+    # a still-payable deposit invoice -- bulk-flip confirmed bookings to
+    # 'cancelled' and void their linked sent/overdue invoices BEFORE the
+    # notification fan-out, in the same transaction as the session flip.
+    bookings_stmt = select(Booking).where(
+        and_(Booking.session_id == session_id, Booking.status == "confirmed")
+    )
+    bookings = list((await db.execute(bookings_stmt)).scalars().all())
+    now = datetime.now(timezone.utc)
+    invoice_ids = [b.invoice_id for b in bookings if b.invoice_id is not None]
+    for booking in bookings:
+        booking.status = "cancelled"
+        booking.cancelled_at = now
+    if invoice_ids:
+        invoices_stmt = select(Invoice).where(
+            and_(
+                Invoice.id.in_(invoice_ids),
+                Invoice.status.in_(("sent", "overdue")),
+            )
+        )
+        invoices = list((await db.execute(invoices_stmt)).scalars().all())
+        for invoice in invoices:
+            invoice.status = "void"
+    await db.flush()
+    logger.info(
+        "cancel_session: session_id=%s cancelled; %d booking(s) cancelled, "
+        "%d invoice(s) voided; notifying",
+        session_id,
+        len(bookings),
+        len(invoice_ids),
+    )
+    # Cascade cancellation emails to every booking that WAS confirmed on
+    # this session -- best-effort, never fails the cancel itself (see
+    # notify.py's swallow-and-log rule). Notified directly off the
+    # `bookings` list captured above rather than via
+    # notify.notify_session_cancelled's own re-query, since that query
+    # filters on Booking.status == "confirmed" and would now find nothing
+    # (we already flipped these rows to "cancelled" above).
+    for booking in bookings:
+        await notify.notify_booking_cancelled(db, cfg, booking)
     return Ok(session)

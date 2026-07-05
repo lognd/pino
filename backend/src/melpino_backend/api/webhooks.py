@@ -9,6 +9,7 @@ from __future__ import annotations
 # see final report) -- domain/invoices/refunds.py's own refund flow still
 # works via the synchronous stripe.Refund.create path either way.
 import argparse
+import uuid
 
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -142,6 +143,45 @@ async def _handle_payment_intent_event(
             .with_for_update()
         )
     ).scalar_one_or_none()
+    if invoice is None:
+        # The invoice's stripe_payment_intent_id column holds only the
+        # LATEST intent id -- if create_stripe_intent replaced a stale
+        # intent with a fresh one after this intent was already confirmed
+        # by the guest, the column lookup above misses even though this
+        # is a legitimate succeeded payment. Fall back to the invoice_id
+        # create_stripe_intent stamps into the intent's own metadata so
+        # the money doesn't get silently orphaned.
+        metadata_invoice_id = (intent.get("metadata") or {}).get("invoice_id")
+        parsed_invoice_id: uuid.UUID | None = None
+        if metadata_invoice_id is not None:
+            try:
+                parsed_invoice_id = uuid.UUID(metadata_invoice_id)
+            except (ValueError, AttributeError, TypeError):
+                _log.warning(
+                    "stripe webhook: metadata.invoice_id is not a valid uuid",
+                    extra={
+                        "stripe_payment_intent_id": intent_id,
+                        "metadata_invoice_id": str(metadata_invoice_id),
+                    },
+                )
+        if parsed_invoice_id is not None:
+            invoice = (
+                await db.execute(
+                    select(Invoice)
+                    .where(Invoice.id == parsed_invoice_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if invoice is not None:
+                _log.warning(
+                    "stripe webhook: matched invoice via metadata.invoice_id "
+                    "fallback -- stripe_payment_intent_id column had been "
+                    "replaced by a newer intent",
+                    extra={
+                        "invoice_id": str(invoice.id),
+                        "stripe_payment_intent_id": intent_id,
+                    },
+                )
     if invoice is None:
         _log.warning(
             "stripe webhook: no invoice matches this payment intent",

@@ -293,6 +293,15 @@ async def cancel_booking(
         await db.flush()
         logger.info("cancel_booking: session_id=%s un-flipped full", session.id)
 
+    # Commit before sending the cancellation/waitlist-offer emails (see
+    # FINDINGS.md M1): mirrors create_booking's commit-before-notify fix
+    # above. Without this, a failed end-of-request commit rolls back the
+    # status flip / seat re-derivation while the guest and a waitlister
+    # have already been emailed -- the guest thinks they're cancelled
+    # (they aren't) and the waitlister was invited to a seat that never
+    # actually opened. get_db()'s own end-of-request commit becomes a
+    # no-op on top of this.
+    await db.commit()
     await notify.notify_booking_cancelled(db, cfg, booking)
     # Offer sized to what THIS cancellation actually released
     # (party_size), not the session's total current free capacity -- see

@@ -45,7 +45,7 @@ def _to_response(waiver) -> dict:  # noqa: ANN001 -- Waiver ORM row
 
 @router.post("/students/{student_id}")
 async def upload_waiver_endpoint(
-    student_id: str,
+    student_id: UUID,
     file: UploadFile,
     db: AsyncSession = Depends(get_db),
     session: SessionInfo = Depends(require_staff),
@@ -56,7 +56,7 @@ async def upload_waiver_endpoint(
     result = await upload_waiver(
         db,
         storage,
-        student_id=UUID(student_id),
+        student_id=student_id,
         content_type=file.content_type or "application/octet-stream",
         data=data,
         uploaded_by=session.user_id,
@@ -69,28 +69,32 @@ async def upload_waiver_endpoint(
 
 @router.get("/students/{student_id}")
 async def list_waivers(
-    student_id: str,
+    student_id: UUID,
     db: AsyncSession = Depends(get_db),
     session: SessionInfo = Depends(require_staff),
 ) -> list[dict]:
     """Admin lists every waiver on file for a student."""
-    waivers = await list_waivers_for_student(db, UUID(student_id))
+    waivers = await list_waivers_for_student(db, student_id)
     return [_to_response(w) for w in waivers]
 
 
 @router.get("/{waiver_id}/download")
 async def download_waiver(
-    waiver_id: str,
+    waiver_id: UUID,
     db: AsyncSession = Depends(get_db),
     session: SessionInfo = Depends(require_staff),
 ) -> Response:
     """Streams a waiver's bytes through this authenticated route -- never
     a public URL, see docs/design/13-storage-abstraction.md."""
-    waiver = await db.get(Waiver, UUID(waiver_id))
+    waiver = await db.get(Waiver, waiver_id)
     if waiver is None:
         raise to_http_exception(WaiverError.NotFound)
     storage = get_storage_backend(_cfg)
-    result = await stream_waiver(db, storage, UUID(waiver_id))
+    result = await stream_waiver(db, storage, waiver_id)
     if result.is_err:
         raise to_http_exception(result.danger_err)
-    return Response(content=result.danger_ok, media_type=waiver.content_type)
+    return Response(
+        content=result.danger_ok,
+        media_type=waiver.content_type,
+        headers={"Content-Disposition": "attachment; filename=waiver"},
+    )

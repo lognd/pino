@@ -55,7 +55,7 @@ class InvoiceCreateRequest(BaseModel):
 
     model_config = {}
 
-    student_id: str
+    student_id: UUID
     line_items: list[LineItemRequest]
     memo: str | None = None
 
@@ -95,7 +95,7 @@ class ManualPaymentRequest(BaseModel):
     method: service.ManualPaymentMethod
     amount: Decimal
     note: str | None = None
-    client_request_id: str
+    client_request_id: UUID
 
 
 class RefundRequest(BaseModel):
@@ -104,10 +104,10 @@ class RefundRequest(BaseModel):
 
     model_config = {}
 
-    payment_id: str
+    payment_id: UUID
     amount: Decimal | None = None
     reason: str | None = None
-    client_request_id: str
+    client_request_id: UUID
 
 
 @router.get("/stats")
@@ -149,7 +149,7 @@ async def create_invoice_endpoint(
     result = await create_invoice(
         db,
         _cfg,
-        UUID(payload.student_id),
+        payload.student_id,
         [
             LineItemInput(
                 description=item.description,
@@ -173,7 +173,7 @@ async def create_invoice_endpoint(
 
 @router.post("/{invoice_id}/send")
 async def send_invoice(
-    invoice_id: str,
+    invoice_id: UUID,
     db: AsyncSession = Depends(get_db),
     session: SessionInfo = Depends(require_staff),
 ) -> dict:
@@ -183,7 +183,7 @@ async def send_invoice(
     (see derive_pay_token / pay_link_for_invoice), so a re-send carries
     the SAME URL as the original -- nothing is invalidated by
     re-sending."""
-    invoice = await service.lock_invoice_for_update(db, UUID(invoice_id))
+    invoice = await service.lock_invoice_for_update(db, invoice_id)
     if invoice is None or invoice.deleted_at is not None:
         raise to_http_exception(InvoiceError.NotFound)
     if invoice.status == "draft":
@@ -200,7 +200,7 @@ async def send_invoice(
 
 @router.post("/{invoice_id}/manual-payment")
 async def record_manual_payment_endpoint(
-    invoice_id: str,
+    invoice_id: UUID,
     payload: ManualPaymentRequest,
     db: AsyncSession = Depends(get_db),
     session: SessionInfo = Depends(require_staff),
@@ -208,13 +208,13 @@ async def record_manual_payment_endpoint(
     """Admin records a Zelle/cash/card-reader-outside-the-system payment."""
     result = await record_manual_payment(
         db,
-        UUID(invoice_id),
+        invoice_id,
         session.user_id,
         ManualPaymentInput(
             method=payload.method,
             amount=payload.amount,
             note=payload.note,
-            client_request_id=UUID(payload.client_request_id),
+            client_request_id=payload.client_request_id,
         ),
     )
     if result.is_err:
@@ -225,7 +225,7 @@ async def record_manual_payment_endpoint(
 
 @router.post("/{invoice_id}/refund")
 async def refund_payment_endpoint(
-    invoice_id: str,
+    invoice_id: UUID,
     payload: RefundRequest,
     db: AsyncSession = Depends(get_db),
     session: SessionInfo = Depends(require_admin),
@@ -234,13 +234,13 @@ async def refund_payment_endpoint(
     result = await refund_payment(
         db,
         _cfg,
-        UUID(invoice_id),
+        invoice_id,
         session.user_id,
         RefundInput(
-            payment_id=UUID(payload.payment_id),
+            payment_id=payload.payment_id,
             amount=payload.amount,
             reason=payload.reason,
-            client_request_id=UUID(payload.client_request_id),
+            client_request_id=payload.client_request_id,
         ),
     )
     if result.is_err:
@@ -250,15 +250,13 @@ async def refund_payment_endpoint(
 
 @sessions_router.post("/{class_session_id}/invoice-unpaid")
 async def invoice_unpaid_for_session(
-    class_session_id: str,
+    class_session_id: UUID,
     db: AsyncSession = Depends(get_db),
     session: SessionInfo = Depends(require_staff),
 ) -> list[dict]:
     """ "Invoice everyone still unpaid for Saturday's class" -- creates one
     invoice per confirmed booking on the session that has no invoice_id
     yet, skipping already-invoiced bookings."""
-    invoices = await invoice_unpaid_bookings_for_session(
-        db, _cfg, UUID(class_session_id)
-    )
+    invoices = await invoice_unpaid_bookings_for_session(db, _cfg, class_session_id)
     await db.commit()
     return [_to_response(inv).model_dump() for inv in invoices]

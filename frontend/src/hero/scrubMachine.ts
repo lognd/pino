@@ -83,7 +83,7 @@ const LOW_FPS_SECONDS_TO_TRIP = 2;
  * fps window restarts fresh after the gap. */
 export const SUSPEND_GAP_MS = 1000;
 
-export type ScrubMode = "active" | "settle" | "breaking" | "touch";
+export type ScrubMode = "active" | "settle" | "breaking" | "touch" | "idle";
 
 export interface ScrubMachineState {
   /** Displayed progress in [0,1]; what the source + wordmark render. */
@@ -126,6 +126,9 @@ export interface ScrubInput {
   wordmarkHit?: boolean;
   /** True on the tick the pointer left the hero (forces settle-home). */
   pointerLeft?: boolean;
+  /** True on the tick a touch/pointerdown first fires while in "idle" mode
+   * -- starts the touch one-shot pass. Ignored outside "idle". */
+  interactionStart?: boolean;
 }
 
 export interface ScrubMachineConfig {
@@ -155,7 +158,10 @@ function easeOutCubic(t: number): number {
 }
 
 /** Fresh machine state parked at sequence start. Active (energy-driven) unless
- * `touch` is set, in which case it begins the one-shot forward pass. */
+ * `touch` is set, in which case it rests at 0 ("idle") until the first
+ * interaction fires the one-shot forward pass -- there is no cursor on a
+ * touchscreen, so autoplaying on mount (or a drag-energy substitute) has no
+ * equivalent "the viewer is here" signal; a tap is the real one. */
 export function initialScrubState(
   config: Partial<ScrubMachineConfig> = {},
 ): ScrubMachineState {
@@ -164,7 +170,7 @@ export function initialScrubState(
   return {
     progress: 0,
     energy: 0,
-    mode: touch ? "touch" : "active",
+    mode: touch ? "idle" : "active",
     idleMs: 0,
     settleMs: 0,
     settleFrom: 0,
@@ -249,6 +255,18 @@ export function step(state: ScrubMachineState, input: ScrubInput): ScrubMachineS
   // works from any mode as long as we're still short of the broken state) ---
   if (input.wordmarkHit && state.mode !== "breaking" && state.progress < BREAK_TARGET) {
     enterBreaking(next, state.progress);
+  }
+
+  // --- touch idle: resting at 0 until the first interaction starts the
+  // one-shot pass below. Break-on-reach above can still pre-empt this
+  // (a direct tap on the wordmark) into the breaking ramp. ---
+  if (next.mode === "idle") {
+    next.progress = 0;
+    if (input.interactionStart) {
+      next.mode = "touch";
+      next.touchMs = 0;
+    }
+    return next;
   }
 
   // --- touch one-shot: ignore energy, ramp 0 -> 1 once, then settle to 0.

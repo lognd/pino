@@ -135,9 +135,18 @@ describe("hero/scrubMachine.ts idle settle-home", () => {
   });
 });
 
-describe("hero/scrubMachine.ts touch one-shot", () => {
-  it("plays 0 -> 1 then settles back to 0, ignoring pointer energy", () => {
+describe("hero/scrubMachine.ts touch idle + one-shot on interaction", () => {
+  it("rests at 0 in idle mode until the first interaction, ignoring pointer energy", () => {
     let s = initialScrubState({ touch: true });
+    expect(s.mode).toBe("idle");
+    s = run(s, 2000, { moveAmount: 0.05 }); // movement alone must not start it
+    expect(s.mode).toBe("idle");
+    expect(s.progress).toBe(0);
+  });
+
+  it("starts the one-shot pass on interactionStart, plays 0 -> 1, then settles back to 0", () => {
+    let s = initialScrubState({ touch: true });
+    s = step(s, { dtMs: FRAME, interactionStart: true });
     expect(s.mode).toBe("touch");
     const mid = run(s, TOUCH_INTRO_MS / 2, { moveAmount: 0 });
     expect(mid.progress).toBeGreaterThan(0.2);
@@ -148,8 +157,16 @@ describe("hero/scrubMachine.ts touch one-shot", () => {
     expect(s.progress).toBeLessThan(0.03);
   });
 
-  it("touching the wordmark triggers break-on-reach during the touch pass", () => {
+  it("touching the wordmark while idle triggers break-on-reach directly", () => {
     let s = initialScrubState({ touch: true });
+    s = step(s, { dtMs: FRAME, wordmarkHit: true });
+    expect(s.mode).toBe("breaking");
+  });
+
+  it("touching the wordmark during the touch pass also triggers break-on-reach", () => {
+    let s = initialScrubState({ touch: true });
+    s = step(s, { dtMs: FRAME, interactionStart: true });
+    expect(s.mode).toBe("touch");
     s = step(s, { dtMs: FRAME, wordmarkHit: true });
     expect(s.mode).toBe("breaking");
   });

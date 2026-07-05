@@ -84,6 +84,10 @@ export function useScrub(
   const pendingHit = useRef<boolean>(false);
   // Set on pointerleave; consumed once to force settle-home immediately.
   const pendingLeft = useRef<boolean>(false);
+  // Raised once on the first pointerdown anywhere in the hero while in
+  // touch mode -- kicks off the one-shot play-through on interaction
+  // (rather than autoplaying on mount).
+  const pendingInteractionStart = useRef<boolean>(false);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
   const insideWordmark = useRef<boolean>(false);
   const machine = useRef<ScrubMachineState>(initialScrubState());
@@ -114,8 +118,11 @@ export function useScrub(
       if (rect.width <= 0 || rect.height <= 0) return;
       const diag = Math.hypot(rect.width, rect.height);
       const prev = lastPointer.current;
-      // Touch never feeds energy (rung 3: no interactive scrub, no scroll
-      // hijack). Hover-capable pointers accumulate movement into energy.
+      // Touch never feeds energy -- there is no cursor, so "movement
+      // energy" (the desktop SUPERHOT hook) doesn't have an equivalent
+      // gesture on a touchscreen; touch instead plays a one-shot pass on
+      // first interaction (see scrubMachine's touch mode below).
+      // Hover-capable pointers accumulate movement into energy.
       if (!touch && e.pointerType !== "touch" && prev) {
         const dx = e.clientX - prev.x;
         const dy = e.clientY - prev.y;
@@ -130,6 +137,8 @@ export function useScrub(
     const onPointerDown = (e: PointerEvent): void => {
       // Touch break-on-reach: a tap inside the wordmark fires the shot.
       if (wordmarkHitTest(e.clientX, e.clientY)) pendingHit.current = true;
+      // Any tap anywhere in the hero starts the touch one-shot pass.
+      if (touch) pendingInteractionStart.current = true;
     };
     const onPointerLeave = (): void => {
       lastPointer.current = null;
@@ -155,11 +164,14 @@ export function useScrub(
       pendingHit.current = false;
       const pointerLeft = pendingLeft.current;
       pendingLeft.current = false;
+      const interactionStart = pendingInteractionStart.current;
+      pendingInteractionStart.current = false;
       const nextMachine = step(machine.current, {
         dtMs,
         moveAmount,
         wordmarkHit,
         pointerLeft,
+        interactionStart,
       });
       machine.current = nextMachine;
 

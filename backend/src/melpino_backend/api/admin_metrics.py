@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from melpino_backend.auth.sessions import SessionInfo, require_staff
+from melpino_backend.auth.sessions import SessionInfo, require_admin
 from melpino_backend.db.base import get_db
 from melpino_backend.db.models.bookings import Booking
 
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/admin/metrics", tags=["admin-metrics"])
 @router.get("/bookings-by-source")
 async def bookings_by_source(
     db: AsyncSession = Depends(get_db),
-    _admin: SessionInfo = Depends(require_staff),
+    _admin: SessionInfo = Depends(require_admin),
 ) -> dict:
     """Booking counts split by origin ('web' = booked through the site,
     'admin' = entered manually), all-time and per month (YYYY-MM, newest

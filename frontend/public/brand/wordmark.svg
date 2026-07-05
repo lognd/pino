@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  PLACEHOLDER wordmark lockup -- to be replaced by the real traced,
+  PLACEHOLDER wordmark lockup - to be replaced by the real traced,
   shard-split asset per docs/design/08-landing-hero.md (each shard needs
   its own id'd polygon, ~12-20 shards, for the reactive shatter effect).
   TODO(impl) P1: replace with the traced shard-split SVG; see
   frontend/public/brand/README.md.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 240" role="img" aria-label="Mel Pino">
-  <rect x="0" y="0" width="640" height="240" fill="#000000" />
+<!-- width/height are REQUIRED, not decoration: without an explicit intrinsic
+     size Chromium reports naturalWidth 0 for viewBox-only SVGs in <img>, and
+     any `width: auto` sizing collapses the logo to 0px (invisible nav logo
+     bug). Background stays transparent - the header is already black. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="240" viewBox="0 0 640 240" role="img" aria-label="Mel Pino">
   <text
     x="40"
     y="150"

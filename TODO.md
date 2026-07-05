@@ -161,6 +161,13 @@ implementing; docs win over guesses.
 - [x] Playwright mockup smoke test
 - [ ] HUMAN INPUT: demo to Mel; record per-screen answers in 14;
       then re-scope P7+ admin build accordingly
+- [ ] api/admin_schedule.py: `list_courses_admin`, `create_course`, and
+      `get_session_roster` are still NotImplementedError stubs
+      (FINDINGS.md M3 fix pass wired cancel_session/publish_session/
+      create_session/create_on_behalf_booking to domain functions that
+      already existed in domain/courses/service.py; these three have no
+      backing domain function anywhere yet -- a real implementation
+      pass, not a wiring fix)
 
 ## User-feedback rounds (docs/design/08 Revisions 2-5, doc 15)
 

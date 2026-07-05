@@ -95,7 +95,12 @@ const LETTERS: LetterEntry[] = [
  * re-centered per row and stacked vertically with a row gap. The constant
  * +31 x-offset between rect.x and textX is the skewX(-9) pre-shift, true
  * for every letter in the horizontal table -- kept identical here. */
-const STACKED_ROW_GAP = 10;
+// Negative: the 168-unit letter cell has real font-metric padding on both
+// sides (no descenders in ALL-CAPS glyphs, plus ascender headroom above cap
+// height), so the two rows' bounding boxes must overlap for the actual INK
+// to read as tightly spaced -- a positive/zero gap here leaves a visibly
+// oversized blank band between the words.
+const STACKED_ROW_GAP = -45;
 const STACKED_MARGIN_Y = 16;
 const STACKED_FIELD_W = 320;
 // Each row is centered in the field, then nudged by its own offset -- MEL
@@ -103,6 +108,15 @@ const STACKED_FIELD_W = 320;
 // of stacking dead-center (a small diagonal lean, not a rigid column).
 const STACKED_OFFSET_X_MEL = -22;
 const STACKED_OFFSET_X_PINO = 14;
+// Each letter's own skewX(-9) is applied around the SVG's global origin
+// (x' = x + tan(-9deg)*y), not a per-row-local origin -- so a row sitting
+// at a larger absolute y gets sheared further left than a row at a
+// smaller y, independent of any x offset given to it. In the original
+// single-row (horizontal) layout every letter shared one y, so this was
+// invisible; stacking two rows at different y's means the bottom row
+// (PINO) would visually creep left of the top row (MEL) even with a
+// rightward offsetX, unless corrected here.
+const SKEW_TAN = Math.tan((9 * Math.PI) / 180);
 function stackedRow(
   letters: LetterEntry[],
   rowTop: number,
@@ -112,7 +126,8 @@ function stackedRow(
   const left = letters[0].rect.x;
   const right = letters[letters.length - 1].rect.x + letters[letters.length - 1].rect.w;
   const rowWidth = right - left;
-  const margin = (STACKED_FIELD_W - rowWidth) / 2 + offsetX;
+  const skewCorrection = SKEW_TAN * (textY - 168);
+  const margin = (STACKED_FIELD_W - rowWidth) / 2 + offsetX + skewCorrection;
   return letters.map((l) => {
     const x = margin + (l.rect.x - left);
     return { ...l, textY, rect: { ...l.rect, x, y: rowTop }, textX: x + (l.textX - l.rect.x) };

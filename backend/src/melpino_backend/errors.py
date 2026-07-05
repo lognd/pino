@@ -47,6 +47,7 @@ class CourseError(ErrorSet):
     CapacityBelowBooked = (
         "requested capacity is below the number of seats already booked"
     )
+    InvalidState = "session is not in a state that allows this transition"
 
 
 class StudentError(ErrorSet):

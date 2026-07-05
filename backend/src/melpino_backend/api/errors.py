@@ -41,6 +41,7 @@ _STATUS_MAP: dict[ErrorSet, int] = {
     CourseError.NotFound: 404,
     CourseError.SessionOverlap: 409,
     CourseError.CapacityBelowBooked: 422,
+    CourseError.InvalidState: 409,
     StudentError.NotFound: 404,
     InvoiceError.NotFound: 404,
     InvoiceError.NotOwned: 404,  # NOTE: 404 not 403 -- never confirm existence

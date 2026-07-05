@@ -112,6 +112,13 @@ async def publish_session(
     if session is None:
         logger.info("publish_session: session_id=%s not found", session_id)
         return Err(CourseError.NotFound)
+    if session.status != "draft":
+        logger.info(
+            "publish_session: session_id=%s not draft (status=%s)",
+            session_id,
+            session.status,
+        )
+        return Err(CourseError.InvalidState)
     session.status = "published"
     await db.flush()
     logger.info("publish_session: session_id=%s published", session_id)

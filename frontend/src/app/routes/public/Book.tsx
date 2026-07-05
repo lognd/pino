@@ -24,7 +24,7 @@ import { createBooking, joinWaitlist, type BookingCreateResponse } from "../../.
 import { ApiError, RateLimitedError } from "../../../api/client";
 import { zodResolver } from "../../../lib/zodResolver";
 import { bookingDetailsSchema, type BookingDetailsFormValues } from "../../../lib/bookingSchema";
-import { nextStep, prevStep, stepNumber, formatSeatsOpen, type BookStep } from "../../../lib/booking";
+import { nextStep, prevStep, formatSeatsOpen, type BookStep } from "../../../lib/booking";
 import { formatRetryAt, formatSessionTime } from "../../../lib/time";
 
 const T = CONTENT.booking;
@@ -33,10 +33,7 @@ function StepHeading({ step }: { step: BookStep }) {
   const label =
     step === "pick" ? T.steps.pickClass : step === "details" ? T.steps.yourDetails : T.steps.confirm;
   return (
-    <p className="mb-2 text-lg font-semibold uppercase tracking-wide text-mp-muted">
-      Step {stepNumber(step)} of 3
-      <span className="ml-2 text-mp-white">{label}</span>
-    </p>
+    <p className="mb-2 text-lg font-semibold uppercase tracking-wide text-mp-muted">{label}</p>
   );
 }
 

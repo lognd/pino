@@ -48,8 +48,10 @@ export const DEFAULT_IMPACT_FY = ORIGIN_FY;
 const RAY_COUNT = 8;
 
 /** Max per-shard translation in SVG user units (viewBox is 640x240).
- * Revision 5: pulled in from 170 -- wide scatter read as confetti. */
-const MAX_TRANSLATE = 110;
+ * Revision 5 pulled it in from 170 (confetti); Revision 7b trims it again --
+ * the physics momentum + field border now carry the spread, and a smaller
+ * radial base keeps the debris from massing at the impact-opposite side. */
+const MAX_TRANSLATE = 85;
 /** Max per-shard rotation at full shatter, degrees. Revision 5: 26 -> 9;
  * heavy glass plates barely turn, cartoon shards spin. */
 const MAX_ROTATE_DEG = 9;

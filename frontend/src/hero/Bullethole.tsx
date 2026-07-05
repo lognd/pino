@@ -35,11 +35,12 @@ export interface Hole {
 export const HOLE_LIFETIME_MS = 720;
 /** Hole pop-in duration (ms) -- the hole lands FIRST and fast. */
 const POP_MS = 70;
-/** Crack growth: starts as the pop lands, radiates outward. */
-const CRACK_GROW_MS = 150;
-const CRACK_BASE_DELAY_MS = 55;
+/** Crack growth: snappy -- glass cracks propagate near-instantly, the
+ * stagger alone sells the radiation ("cracks need to be faster"). */
+const CRACK_GROW_MS = 80;
+const CRACK_BASE_DELAY_MS = 30;
 /** Per-crack stagger span (ms) so the network radiates, not blinks. */
-const CRACK_STAGGER_MS = 70;
+const CRACK_STAGGER_MS = 40;
 
 const DARK = "#0A0A0B";
 const WHITE = "#F4F4F2";

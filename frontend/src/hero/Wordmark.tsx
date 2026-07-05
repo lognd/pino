@@ -312,6 +312,10 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
       role="presentation"
       aria-hidden="true"
       focusable="false"
+      // Pieces may poke past the viewBox mid-float (the field border
+      // contains their centroids, polygon extents can overhang); visible
+      // overflow means no hard clip line ever shows inside the hero.
+      style={{ overflow: "visible" }}
     >
       <defs>
         {/* Each letter's artwork exists once; pieces <use> only their own. */}

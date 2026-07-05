@@ -191,3 +191,44 @@ describe("hero/piecePhysics.ts homing (no reassembly jump)", () => {
     expect(maxOffsetMag(s)).toBeGreaterThan(0.2); // float alive, not homed away
   });
 });
+
+describe("hero/piecePhysics.ts field border (Revision 7b self-balancing)", () => {
+  it("keeps every piece's position inside the field under a long full-shatter run", () => {
+    const s = freshState();
+    const { bx, by } = basePositions();
+    for (let t = 0; t < 15000; t += 16.7) {
+      stepPiecePhysics(s, PIECES, bx, by, {
+        dtMs: 16.7,
+        shatter: 1,
+        pointerX: null,
+        pointerY: null,
+      });
+    }
+    for (let i = 0; i < PIECES.length; i++) {
+      const posX = bx[i] + s.ox[i];
+      const posY = by[i] + s.oy[i];
+      expect(posX).toBeGreaterThan(-8);
+      expect(posX).toBeLessThan(640 + 8);
+      expect(posY).toBeGreaterThan(-8);
+      expect(posY).toBeLessThan(240 + 8);
+    }
+  });
+
+  it("pushes back a piece shoved into the border by the cursor, momentum intact", () => {
+    const s = freshState();
+    const { bx, by } = basePositions();
+    // Find the right-most piece and shove it toward the right border.
+    let target = 0;
+    for (let i = 0; i < PIECES.length; i++) if (bx[i] > bx[target]) target = i;
+    for (let t = 0; t < 3000; t += 16.7) {
+      stepPiecePhysics(s, PIECES, bx, by, {
+        dtMs: 16.7,
+        shatter: 1,
+        pointerX: bx[target] + s.ox[target] - 30, // always pushing it rightward
+        pointerY: by[target] + s.oy[target],
+      });
+    }
+    // Despite constant outward shoving, the border holds the piece in-field.
+    expect(bx[target] + s.ox[target]).toBeLessThan(640 + 8);
+  });
+});

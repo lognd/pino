@@ -145,14 +145,18 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
   const shardRefs = useRef<(SVGGElement | null)[]>([]);
   const appliedProgress = useRef<number>(-1);
   const requestedProgress = useRef<number>(progress);
+  /** Drift-clock epoch (Revision 6 floating): first applied frame = t 0. */
+  const epochMs = useRef<number>(-1);
 
-  /** Write one frame straight to the DOM. Idempotent; skips no-op repeats. */
+  /** Write one frame straight to the DOM. While the lockup is separated the
+   * shards FLOAT on the drift clock, so repeated calls at the same progress
+   * still repaint; at rest an unchanged progress is a no-op. */
   const apply = useCallback(
     (p: number): void => {
       requestedProgress.current = p;
-      if (p === appliedProgress.current) return;
-
       const shatter = shatterAmount(p);
+      if (p === appliedProgress.current && shatter <= 0) return;
+
       if (shatter > 0 && !shardLayerRef.current) {
         // First separation: mount the shard layer (once); the post-render
         // effect below re-applies this progress to the fresh nodes.
@@ -173,12 +177,16 @@ export const Wordmark = forwardRef<WordmarkHandle, WordmarkProps>(function Wordm
       }
       if (shatter <= 0) return;
 
+      const now = performance.now();
+      if (epochMs.current < 0) epochMs.current = now;
+      const driftMs = now - epochMs.current;
+
       const nodes = shardRefs.current;
       for (let i = 0; i < shards.length; i++) {
         const node = nodes[i];
         if (!node) continue;
         const shard = shards[i];
-        const t = shardTransform(p, shard);
+        const t = shardTransform(p, shard, driftMs);
         node.setAttribute(
           "transform",
           `translate(${t.tx} ${t.ty}) ` +

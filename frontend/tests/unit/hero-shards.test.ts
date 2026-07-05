@@ -131,3 +131,55 @@ describe("hero/shards.ts shardTransform", () => {
     }
   });
 });
+
+// Revision 6: while separated, shards FLOAT -- a slow seeded wander on top of
+// the base displacement, with wall-clock time as an EXPLICIT input so the
+// transform stays pure. These pin the contract: anchored at driftMs 0, zero at
+// progress 0 (reassembly intact), deterministic, bounded, and actually moving.
+
+describe("hero/shards.ts shardTransform drift (Revision 6 floating)", () => {
+  it("reproduces the un-drifted transform exactly at driftMs = 0", () => {
+    for (const shard of SHARDS) {
+      expect(shardTransform(0.7, shard, 0)).toEqual(shardTransform(0.7, shard));
+    }
+  });
+
+  it("never drifts at progress 0, no matter how much time passes", () => {
+    for (const shard of SHARDS) {
+      const t = shardTransform(0, shard, 123456);
+      expect(t.tx).toBeCloseTo(0, 10);
+      expect(t.ty).toBeCloseTo(0, 10);
+      expect(t.rot).toBeCloseTo(0, 10);
+      expect(t.scale).toBe(1);
+    }
+  });
+
+  it("is deterministic in (progress, shard, driftMs)", () => {
+    for (const shard of SHARDS) {
+      expect(shardTransform(0.8, shard, 3210)).toEqual(shardTransform(0.8, shard, 3210));
+    }
+  });
+
+  it("visibly moves shards over time at full shatter", () => {
+    const moved = SHARDS.some((s) => {
+      const a = shardTransform(1, s, 0);
+      const b = shardTransform(1, s, 2500);
+      return Math.hypot(b.tx - a.tx, b.ty - a.ty) > 1;
+    });
+    expect(moved).toBe(true);
+  });
+
+  it("keeps the float bounded (a wander, not a scatter)", () => {
+    // Peak-to-peak of the anchored sine is 2 * amplitude; amplitude tops out
+    // at DRIFT_TRANSLATE * 1.2 for translation and DRIFT_ROT_DEG for rotation.
+    for (const shard of SHARDS) {
+      for (const t of [500, 2000, 5000, 9000, 14000]) {
+        const base = shardTransform(1, shard, 0);
+        const d = shardTransform(1, shard, t);
+        expect(Math.abs(d.tx - base.tx)).toBeLessThanOrEqual(7 * 1.2 * 2 + 1e-9);
+        expect(Math.abs(d.ty - base.ty)).toBeLessThanOrEqual(7 * 1.2 * 2 + 1e-9);
+        expect(Math.abs(d.rot - base.rot)).toBeLessThanOrEqual(1.8 * 2 + 1e-9);
+      }
+    }
+  });
+});

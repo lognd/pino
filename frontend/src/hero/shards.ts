@@ -50,6 +50,15 @@ const RAY_COUNT = 8;
 /** Max per-shard translation in SVG user units (viewBox is 640x240).
  * Revision 5: pulled in from 170 -- wide scatter read as confetti. */
 const MAX_TRANSLATE = 110;
+/** Revision 6 drift: max one-sided float amplitude (SVG user units) for a
+ * near-impact shard; far slabs float less (heavier). Peak-to-peak excursion
+ * is at most 2x this (the sin term spans [-2A, 2A] around its t=0 anchor). */
+const DRIFT_TRANSLATE = 7;
+/** Revision 6 drift: max rotation wobble amplitude, degrees. */
+const DRIFT_ROT_DEG = 1.8;
+/** Revision 6 drift: angular frequency band, rad/ms (periods ~4.5-9s). */
+const DRIFT_W_MIN = 0.0007;
+const DRIFT_W_SPAN = 0.0007;
 /** Max per-shard rotation at full shatter, degrees. Revision 5: 26 -> 9;
  * heavy glass plates barely turn, cartoon shards spin. */
 const MAX_ROTATE_DEG = 9;
@@ -294,11 +303,31 @@ export function buildShards(options: BuildShardsOptions = {}): {
   return { impact, shards };
 }
 
-/** Pure per-shard transform: same (progress, shard) -> same result. shatter is
- * 0 at p = 0 (identity -> pixel-perfect reassembly) and a FULL, HELD 1 at p = 1.
- * Displacement is along the shard's radial vector from the impact; nearer-impact
- * shards lead and travel farther. */
-export function shardTransform(progress: number, shard: Shard): ShardTransform {
+/** One drift axis: a seeded slow sine anchored to 0 at driftMs = 0 (the
+ * `- sin(phase)` term), so t = 0 reproduces the un-drifted transform exactly
+ * and the float ramps in without a snap. Pure in (seed, driftMs). */
+function driftWave(seed: number, driftMs: number): number {
+  const w = DRIFT_W_MIN + hash01(seed) * DRIFT_W_SPAN;
+  const phase = hash01(seed + 1) * Math.PI * 2;
+  return Math.sin(w * driftMs + phase) - Math.sin(phase);
+}
+
+/** Pure per-shard transform: same (progress, shard, driftMs) -> same result.
+ * shatter is 0 at p = 0 (identity -> pixel-perfect reassembly) and a FULL,
+ * HELD 1 at p = 1. Base displacement is along the shard's radial vector from
+ * the impact; nearer-impact shards lead and travel farther.
+ *
+ * Revision 6: while separated, shards FLOAT -- a slow seeded per-shard
+ * wander (translation + rotation wobble) on top of the base displacement.
+ * `driftMs` is the wall-clock input, made explicit so the function stays
+ * pure and deterministic; the drift is scaled by the shatter envelope, so
+ * it is zero at p = 0 (reassembly contract intact) and fades out on the
+ * settle-home as the lockup drifts back together. */
+export function shardTransform(
+  progress: number,
+  shard: Shard,
+  driftMs = 0,
+): ShardTransform {
   const amount = shatterAmount(progress);
 
   const exponent = 0.7 + shard.distNorm * 0.8; // 0.7 (near) .. 1.5 (far).
@@ -310,11 +339,19 @@ export function shardTransform(progress: number, shard: Shard): ShardTransform {
   const scaleDelta = -0.03 + hash01(shard.seed * 3 + 2) * 0.06; // [-0.03, +0.03]
 
   const mag = MAX_TRANSLATE * reach * staggered;
-  const tx = shard.dirX * mag;
-  const ty = shard.dirY * mag;
-  const rot = spin * MAX_ROTATE_DEG * staggered;
+  let tx = shard.dirX * mag;
+  let ty = shard.dirY * mag;
+  let rot = spin * MAX_ROTATE_DEG * staggered;
   const scale = 1 + scaleDelta * staggered;
   const opacity = 1 - (1 - MIN_OPACITY) * staggered;
+
+  if (driftMs !== 0 && amount > 0) {
+    // Lighter near-impact splinters bob more than heavy periphery slabs.
+    const driftReach = DRIFT_TRANSLATE * (1.2 - shard.distNorm * 0.6) * amount;
+    tx += driftWave(shard.seed * 7 + 3, driftMs) * driftReach;
+    ty += driftWave(shard.seed * 7 + 5, driftMs) * driftReach;
+    rot += driftWave(shard.seed * 7 + 7, driftMs) * DRIFT_ROT_DEG * amount;
+  }
 
   return { tx, ty, rot, scale, opacity };
 }

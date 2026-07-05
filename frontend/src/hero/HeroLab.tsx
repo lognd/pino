@@ -122,12 +122,20 @@ export function HeroLab() {
     }
   }, [variant]);
 
-  // Manual override: drive the same imperative path the rAF loop uses.
+  // Manual override: drive the same imperative path the rAF loop uses. The
+  // scrub loop is disabled under override, so a small local loop keeps the
+  // Revision 6 shard float alive at a parked progress value.
   useEffect(() => {
     if (!override) return;
     progressRef.current = manual;
     sourceRef.current?.render(manual);
-    wordmarkHandle.current?.setProgress(manual);
+    let raf = 0;
+    const loop = (): void => {
+      wordmarkHandle.current?.setProgress(manual);
+      raf = requestAnimationFrame(loop);
+    };
+    loop();
+    return () => cancelAnimationFrame(raf);
   }, [override, manual]);
 
   const row = { display: "flex", gap: 8, alignItems: "center" } as const;

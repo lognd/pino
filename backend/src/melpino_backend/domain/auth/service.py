@@ -13,6 +13,7 @@ import logging
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from typani.result import Err, Result
 
@@ -69,7 +70,12 @@ async def ensure_admin_seeded(db: AsyncSession, email: str, password: str) -> No
     Design decision: idempotency is checked by a SELECT-then-INSERT rather
     than an upsert/ON CONFLICT, since this runs at most once per process
     startup (not on a hot path) and the plain read is easier to reason
-    about here than a database-specific upsert. Not a Result-returning
+    about here than a database-specific upsert. The SELECT fast-path is
+    sequential-safe only; concurrent worker startups (multi-worker
+    uvicorn/gunicorn) can race two SELECT-miss branches into the same
+    INSERT, so the insert itself is still wrapped in a SAVEPOINT with the
+    same `IntegrityError`-swallow-and-re-select pattern as
+    `find_or_create_student` (see FINDINGS.md M1). Not a Result-returning
     function -- this is bootstrap plumbing invoked from the lifespan, not
     a caller-facing domain operation with recoverable error variants (see
     task brief: "closer to app bootstrap than domain logic").
@@ -79,7 +85,20 @@ async def ensure_admin_seeded(db: AsyncSession, email: str, password: str) -> No
     if existing is not None:
         logger.info("admin already seeded, skipping", extra={"email": email})
         return
-    user = User(email=email, password_hash=hash_password(password), role="admin")
-    db.add(user)
-    await db.flush()
+    try:
+        async with db.begin_nested():
+            user = User(
+                email=email, password_hash=hash_password(password), role="admin"
+            )
+            db.add(user)
+            await db.flush()
+    except IntegrityError:
+        logger.info(
+            "admin seed race: concurrent worker already seeded, re-selecting",
+            extra={"email": email},
+        )
+        winner = (await db.execute(stmt)).scalar_one_or_none()
+        if winner is None:  # pragma: no cover - defensive, should be unreachable
+            raise
+        return
     logger.info("seeded admin account", extra={"email": email})

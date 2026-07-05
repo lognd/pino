@@ -180,23 +180,37 @@ async def cancel_session(
     for booking in bookings:
         booking.status = "cancelled"
         booking.cancelled_at = now
+    flagged_paid_invoice_count = 0
     if invoice_ids:
-        invoices_stmt = select(Invoice).where(
-            and_(
-                Invoice.id.in_(invoice_ids),
-                Invoice.status.in_(("sent", "overdue")),
-            )
-        )
+        from melpino_backend.domain.invoices.service import flag_invoice_needs_review
+
+        invoices_stmt = select(Invoice).where(Invoice.id.in_(invoice_ids))
         invoices = list((await db.execute(invoices_stmt)).scalars().all())
         for invoice in invoices:
-            invoice.status = "void"
+            if invoice.status in ("sent", "overdue"):
+                invoice.status = "void"
+            elif invoice.status == "paid":
+                # L2: the guest already paid a deposit for a session that
+                # will now never happen. Auto-refund is a deliberate
+                # admin-manual decision (docs/design/05), but leaving
+                # this collected with no signal at all means nobody ever
+                # notices it's owed back -- flag it for review instead.
+                await flag_invoice_needs_review(
+                    db,
+                    invoice,
+                    "session was cancelled after this deposit invoice was "
+                    "already paid -- review for a manual refund",
+                )
+                flagged_paid_invoice_count += 1
     await db.flush()
     logger.info(
         "cancel_session: session_id=%s cancelled; %d booking(s) cancelled, "
-        "%d invoice(s) voided; notifying",
+        "%d invoice(s) voided, %d paid invoice(s) flagged for review; "
+        "notifying",
         session_id,
         len(bookings),
         len(invoice_ids),
+        flagged_paid_invoice_count,
     )
     # Cascade cancellation emails to every booking that WAS confirmed on
     # this session -- best-effort, never fails the cancel itself (see

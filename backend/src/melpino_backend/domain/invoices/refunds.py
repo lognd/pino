@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from melpino_backend.app.config import AppConfig
+    from melpino_backend.db.models.invoices import Refund
 
 _log = get_logger(__name__)
 
@@ -149,7 +150,23 @@ async def refund_payment(
                 "refund retry observed already-succeeded refund",
                 extra={"refund_id": str(existing.id)},
             )
-        return Ok(existing.id)
+            return Ok(existing.id)
+        # status == "pending": this is the reservation row refund_payment
+        # inserts+commits BEFORE the provider call (see below). A prior
+        # attempt may have died between that commit and the provider
+        # call actually returning (worker killed, request timeout) --
+        # that is NOT success, and there is no refund webhook to settle
+        # it later (see refunds.py's stated out-of-scope note). Re-drive
+        # the provider call under the SAME refund_id/idempotency_key
+        # rather than reporting Ok with no money ever moved (FINDINGS.md
+        # M2): the provider-side idempotency key makes this safe even if
+        # the earlier attempt's call actually did go through.
+        _log.warning(
+            "refund retry found stuck-pending reservation; re-driving "
+            "provider call",
+            extra={"refund_id": str(existing.id)},
+        )
+        return await _redrive_pending_refund(db, cfg, existing, admin_id)
 
     invoice = await lock_invoice_for_update(db, invoice_id)
     if invoice is None or invoice.deleted_at is not None:
@@ -271,6 +288,98 @@ async def refund_payment(
         admin_id=admin_id,
         amount=amount,
         reason=refund.reason,
+        status=refund_status,
+        stripe_refund_id=stripe_refund_id,
+        paypal_refund_id=paypal_refund_id,
+    )
+
+
+async def _redrive_pending_refund(
+    db: "AsyncSession",
+    cfg: "AppConfig",
+    reservation: "Refund",
+    admin_id: UUID,
+) -> Result[UUID, RefundError | PaymentProviderError]:
+    """Re-attempts the provider call for a reservation Refund row stuck
+    in "pending" from a prior refund_payment call that died mid-flight
+    (see FINDINGS.md M2). Uses the SAME refund_id, so the idempotency_key
+    handed to Stripe/PayPal is identical to the original attempt -- if
+    that attempt's provider call actually did land, the provider itself
+    returns the original result instead of double-refunding."""
+    from melpino_backend.db.models.invoices import Invoice, Payment
+
+    payment = await db.get(Payment, reservation.payment_id)
+    invoice = await db.get(Invoice, reservation.invoice_id)
+    if payment is None or invoice is None:
+        return Err(RefundError.PaymentNotFound)
+
+    amount = reservation.amount
+    currency = invoice.currency
+    refund_id = reservation.id
+    is_stripe = payment.method == "stripe" and bool(payment.stripe_payment_intent_id)
+    is_paypal = payment.method == "paypal" and bool(payment.paypal_capture_id)
+    idempotency_key = f"refund:{refund_id}" if (is_stripe or is_paypal) else None
+
+    stripe_refund_id: str | None = None
+    paypal_refund_id: str | None = None
+    refund_status = "succeeded"
+
+    if is_stripe:
+        _configure_stripe(cfg)
+        try:
+            stripe_refund = await asyncio.to_thread(
+                stripe.Refund.create,
+                payment_intent=payment.stripe_payment_intent_id,
+                amount=to_minor_units(amount, currency),
+                idempotency_key=idempotency_key,
+            )
+        except stripe.error.StripeError as exc:
+            _log.error(
+                "stripe refund re-drive failed",
+                extra={"payment_id": str(payment.id)},
+                exc_info=exc,
+            )
+            await _fail_reservation(db, refund_id)
+            return Err(PaymentProviderError.RequestFailed)
+        stripe_refund_id = stripe_refund["id"]
+        refund_status = STRIPE_REFUND_STATUS_MAP.get(stripe_refund["status"], "pending")
+    elif is_paypal:
+        result = await paypal.refund_capture(
+            cfg,
+            payment.paypal_capture_id,
+            amount,
+            currency,
+            idempotency_key=idempotency_key,
+        )
+        if result.is_err:
+            await _fail_reservation(db, refund_id)
+            return Err(result.danger_err)
+        paypal_refund_id = result.danger_ok.refund_id
+        refund_status = _PAYPAL_REFUND_STATUS_MAP.get(
+            result.danger_ok.status, "pending"
+        )
+    else:
+        # No provider reference to re-drive against (e.g. reservation
+        # was somehow created for a manual/bookkeeping-only refund,
+        # which the caller never actually does today). Nothing to retry;
+        # fail the reservation rather than leave it stuck forever.
+        _log.error(
+            "refund re-drive: reservation has no provider reference to "
+            "retry against",
+            extra={"refund_id": str(refund_id)},
+        )
+        await _fail_reservation(db, refund_id)
+        return Err(RefundError.ProviderReferenceMissing)
+
+    return await _record_refund(
+        db,
+        cfg=cfg,
+        refund_id=refund_id,
+        invoice_id=reservation.invoice_id,
+        payment_id=payment.id,
+        admin_id=admin_id,
+        amount=amount,
+        reason=reservation.reason,
         status=refund_status,
         stripe_refund_id=stripe_refund_id,
         paypal_refund_id=paypal_refund_id,

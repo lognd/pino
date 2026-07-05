@@ -252,6 +252,13 @@ async def capture_paypal_order_endpoint(
     )
     if invoice is None:
         raise to_http_exception(InvoiceError.NotFound)
+    if invoice.status not in ("sent", "overdue"):
+        # Same guard create_stripe_intent / create_paypal_order_endpoint
+        # apply -- without it, a capture can land on an invoice already
+        # settled by another method (has_pending_payment alone doesn't
+        # catch that, since the other payment is succeeded, not pending),
+        # recording a real double-collect.
+        raise to_http_exception(InvoiceError.InvalidState)
     if await service.has_pending_payment(db, invoice.id):
         raise to_http_exception(InvoiceError.PaymentPending)
 

@@ -31,6 +31,9 @@ playwright-report/
 .frob/
 FROBLEMS.md
 
+# audit-fix skill working artifact
+FINDINGS.md
+
 # IDE
 .idea/
 

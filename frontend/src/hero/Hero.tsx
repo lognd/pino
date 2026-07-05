@@ -20,7 +20,7 @@ import { useScrub } from "./useScrub";
 import { prefersReducedMotion, isTouchDevice } from "./env";
 import type { ScrubSource } from "./timeline";
 import { createHeroSource, resolveHeroSourceKind } from "./sources/select";
-import { logWarn } from "../lib/logging";
+import { logDebug, logWarn } from "../lib/logging";
 
 /** Sources may expose a quiescence probe (SimulatedSource does): true means
  * re-rendering the same progress repaints identical pixels, so idle frames
@@ -45,9 +45,13 @@ export function Hero() {
   const [reduced] = useState<boolean>(prefersReducedMotion);
   const [touch] = useState<boolean>(isTouchDevice);
 
+  // Frame-accurate progress of the latest draw (for post-resize repaints).
+  const progressRef = useRef(0);
+
   // Revision 5: all per-frame drawing happens HERE, off the rAF loop --
   // canvas render + imperative wordmark writes. No React state per frame.
   const onFrame = useCallback((progress: number): void => {
+    progressRef.current = progress;
     const source = sourceRef.current;
     if (source && !isQuiescent(source, progress)) source.render(progress);
     wordmarkHandle.current?.setProgress(progress);
@@ -105,10 +109,41 @@ export function Hero() {
       idleId = window.setTimeout(() => void start(), 1) as unknown as number;
     }
 
+    // Container resizes (rotation, window drag): the canvas backing store was
+    // sized once at init, so CSS would stretch it blurry. Re-size + re-init
+    // the source (its gradients are built in device pixels) and repaint the
+    // current frame. Coalesced through rAF; skipped when the size is stable.
+    let resizeRaf = 0;
+    const onResize = (): void => {
+      if (resizeRaf) return;
+      resizeRaf = window.requestAnimationFrame(() => {
+        resizeRaf = 0;
+        const source = sourceRef.current;
+        if (!source || cancelled) return;
+        const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+        const cssW = container.clientWidth || 1280;
+        const cssH = container.clientHeight || Math.round(cssW * 0.5);
+        const pxW = Math.round(cssW * dpr);
+        const pxH = Math.round(cssH * dpr);
+        if (pxW === canvas.width && pxH === canvas.height) return;
+        canvas.width = pxW;
+        canvas.height = pxH;
+        logDebug("hero: canvas resized, reinitializing source", `${pxW}x${pxH}`);
+        void source.init(canvas).then(() => {
+          if (!cancelled) source.render(progressRef.current);
+        });
+      });
+    };
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(onResize) : null;
+    resizeObserver?.observe(container);
+
     return () => {
       cancelled = true;
       if (typeof w.cancelIdleCallback === "function") w.cancelIdleCallback(idleId);
       else window.clearTimeout(idleId);
+      resizeObserver?.disconnect();
+      if (resizeRaf) window.cancelAnimationFrame(resizeRaf);
       sourceRef.current?.dispose();
       sourceRef.current = null;
     };
@@ -158,6 +193,11 @@ export function Hero() {
       {/* Wordmark overlay: interactive when live, static (progress 0) on the
           poster. The poster art already contains a whole lockup, so we only
           overlay the live, fracturing wordmark. */}
+      {/* Rest-state ambience: CSS-only drifting haze (doc 08's "subtly
+          alive" rule) -- zero JS, disabled under prefers-reduced-motion. */}
+      {showLiveCanvas && (
+        <div className="mp-hero-ambient pointer-events-none absolute inset-0" />
+      )}
       {showLiveCanvas && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div ref={wordmarkRef} className="w-3/4 max-w-3xl">

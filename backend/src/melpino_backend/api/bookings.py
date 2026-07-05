@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +23,7 @@ from melpino_backend.auth.rate_limit import (
     rate_limit,
 )
 from melpino_backend.db.base import get_db
+from melpino_backend.db.models.bookings import Booking
 from melpino_backend.db.models.class_sessions import ClassSession
 from melpino_backend.db.models.courses import Course
 from melpino_backend.domain.booking.service import (
@@ -33,6 +35,11 @@ from melpino_backend.domain.booking.service import (
     manage_url_for,
     resend_confirmation,
     within_cancellation_window,
+)
+from melpino_backend.domain.calendar.ics import (
+    IcsEvent,
+    build_calendar,
+    google_calendar_link,
 )
 from melpino_backend.errors import BookingError
 
@@ -113,6 +120,29 @@ class BookingDetailResponse(BaseModel):
     # links straight to its invoice's pay page when a balance is due").
     pay_url: str | None = None
     amount_due: str | None = None
+    # Add-to-calendar affordances (doc 04 addendum): a downloadable .ics
+    # for any calendar app plus a prefilled Google Calendar link. Both are
+    # derived from data this response already carries -- no new authority.
+    ics_url: str = ""
+    google_calendar_url: str = ""
+
+
+def _booking_event(
+    booking: "Booking", session: ClassSession, course: Course, manage_url: str
+) -> IcsEvent:
+    """The guest-facing VEVENT for one booking's class session."""
+    location = session.location_name
+    if session.location_addr:
+        location = f"{session.location_name}, {session.location_addr}"
+    return IcsEvent(
+        uid=f"booking-{booking.id}@melpino",
+        summary=course.title,
+        starts_at=session.starts_at,
+        ends_at=session.ends_at,
+        description=f"Party of {booking.party_size}. Manage your booking: {manage_url}",
+        location=location,
+        url=manage_url,
+    )
 
 
 def _to_input(payload: BookingCreateRequest, session_id: UUID) -> BookingInput:
@@ -240,6 +270,7 @@ async def get_booking_by_token_endpoint(
                 )
                 amount_due_str = str(amount_due)
 
+    event = _booking_event(booking, session, course, manage_url_for(_cfg, token))
     return BookingDetailResponse(
         booking_id=str(booking.id),
         status=booking.status,
@@ -252,7 +283,35 @@ async def get_booking_by_token_endpoint(
         can_cancel_online=can_cancel,
         pay_url=pay_url,
         amount_due=amount_due_str,
+        ics_url=f"{_cfg.public_base_url}/api/bookings/manage/{token}/event.ics",
+        google_calendar_url=google_calendar_link(event),
     ).model_dump()
+
+
+@router.get("/manage/{token}/event.ics")
+async def booking_event_ics(
+    token: str,
+    db: AsyncSession = Depends(get_db),
+    _rl: None = Depends(_rl_manage),
+) -> PlainTextResponse:
+    """Downloadable single-event .ics for a booking (manage-token auth,
+    same rate limit as the manage page it hangs off)."""
+    result = await get_booking_by_token(db, token)
+    if result.is_err:
+        raise to_http_exception(result.danger_err)
+    booking = result.danger_ok
+    session = await db.get(ClassSession, booking.session_id)
+    assert session is not None  # FK RESTRICT: a booking's session always exists
+    course = await db.get(Course, session.course_id)
+    assert course is not None
+    event = _booking_event(booking, session, course, manage_url_for(_cfg, token))
+    body = build_calendar([event], calendar_name=_cfg.business_short_name)
+    logger.info("booking_event_ics: served booking_id=%s", booking.id)
+    return PlainTextResponse(
+        body,
+        media_type="text/calendar; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="class.ics"'},
+    )
 
 
 @router.post("/manage/{token}/cancel")

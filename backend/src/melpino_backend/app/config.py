@@ -109,6 +109,10 @@ class AppConfig(BaseModel):
     # docs/design/02) are never given a public URL regardless of this
     # setting; course PDFs may opt into it later.
     r2_public_base_url: str | None = None
+    # Long random secret gating the subscribable ICS calendar feed
+    # (/api/calendar/feed.ics?key=...). Calendar apps cannot send admin
+    # session cookies, so the key IS the auth -- unset disables the feed.
+    calendar_feed_key: str | None = None
     host: str = "127.0.0.1"
     port: int = 8000
 
@@ -145,6 +149,7 @@ class AppConfig(BaseModel):
             "INVOICE_BUSINESS_DETAILS": "invoice_business_details",
             "INVOICE_CONTACT_EMAIL": "invoice_contact_email",
             "ZELLE_HANDLE": "zelle_handle",
+            "CALENDAR_FEED_KEY": "calendar_feed_key",
             "BOOKING_CANCELLATION_HOURS": "booking_cancellation_hours",
             "REMINDER_DAYS_BEFORE": "reminder_days_before",
             "SMTP_HOST": "smtp_host",

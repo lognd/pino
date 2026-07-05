@@ -50,6 +50,11 @@ class BookingInput:
     # Bots fill this hidden field; humans never see it. The honeypot is
     # rejected at the API boundary (api/bookings.py), not here.
     honeypot_field: str = field(default="")
+    # Booking origin for the site-fee metrics: 'web' for the public flow,
+    # 'admin' for Mel's manual/phone entry (the on-behalf endpoint). NEVER
+    # populated from client input -- api/bookings.py does not map it, so a
+    # public request can only ever produce 'web'.
+    source: str = "web"
 
 
 def manage_url_for(cfg: "AppConfig", raw_token: str) -> str:
@@ -149,6 +154,7 @@ async def create_booking(
         student_id=student.id,
         party_size=payload.party_size,
         status="confirmed",
+        source=payload.source,
         manage_token_hash=token_hash,
         attested_at=now,
         attestation_version=payload.attestation_version,
@@ -162,10 +168,11 @@ async def create_booking(
         logger.info("create_booking: session_id=%s flipped to full", session.id)
     await db.flush()
     logger.info(
-        "create_booking: created booking_id=%s session_id=%s party_size=%d",
+        "create_booking: created booking_id=%s session_id=%s party_size=%d source=%s",
         booking.id,
         session.id,
         payload.party_size,
+        payload.source,
     )
 
     # Deposit auto-invoice (docs/design/04's deposit contract, wired in

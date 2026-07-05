@@ -33,6 +33,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from melpino_backend.db.base import Base
 
 _STATUS_CHECK = "status in ('confirmed', 'cancelled', 'attended', 'no_show')"
+_SOURCE_CHECK = "source in ('web', 'admin')"
 
 
 class Booking(Base):
@@ -43,6 +44,7 @@ class Booking(Base):
     __table_args__ = (
         CheckConstraint("party_size >= 1", name="ck_bookings_party_size"),
         CheckConstraint(_STATUS_CHECK, name="ck_bookings_status"),
+        CheckConstraint(_SOURCE_CHECK, name="ck_bookings_source"),
         # PARTIAL unique index, not a plain unique constraint -- see the
         # module docstring's DISCREPANCY note. A student can rebook the
         # same session after cancelling; only one *confirmed* booking per
@@ -78,6 +80,14 @@ class Booking(Base):
     )
     party_size: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="confirmed")
+    # WHERE the booking came from: 'web' (guest booked through the site) or
+    # 'admin' (Mel entered it manually, e.g. a phone booking). Feeds the
+    # bookings-by-source metrics -- the owner's site-fee billing is keyed to
+    # how many bookings the site itself produced. Never client-settable on
+    # the public API (api/bookings.py builds BookingInput without it).
+    source: Mapped[str] = mapped_column(
+        Text, nullable=False, default="web", server_default="web"
+    )
     # manage_token_hash's own uniqueness (SHA-256, see 02) is separate
     # from the session/student partial index above -- unique=True here is
     # a plain constraint since this column is always populated and truly

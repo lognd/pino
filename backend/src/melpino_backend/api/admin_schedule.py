@@ -62,7 +62,9 @@ async def create_on_behalf_booking(
     session: SessionInfo = Depends(require_staff),
 ) -> dict:
     """Phone bookings: Mel types what the caller says; skips rate limits,
-    records attestation_version='admin-phone'."""
+    records attestation_version='admin-phone'. MUST pass
+    BookingInput(source='admin') so the bookings-by-source billing
+    metrics (api/admin_metrics.py) count it as a manual entry."""
     raise NotImplementedError(
         "see docs/design/04-booking-and-scheduling.md"
     )  # TODO(impl)

@@ -186,10 +186,13 @@ class App:
         """Mounts every api/ router -- deferred imports so constructing an
         App for a unit test never pulls in domain/db modules unnecessarily."""
         from melpino_backend.api import (
+            admin_logs,
+            admin_metrics,
             admin_schedule,
             admin_students,
             auth,
             bookings,
+            calendar,
             config_public,
             courses,
             health,
@@ -210,6 +213,10 @@ class App:
         app.include_router(webhooks.router)
         app.include_router(admin_schedule.router)
         app.include_router(admin_students.router)
+        app.include_router(admin_metrics.router)
+        app.include_router(admin_logs.router)
+        app.include_router(calendar.router)
+        app.include_router(calendar.admin_router)
         app.include_router(waivers.router)
 
     @asynccontextmanager

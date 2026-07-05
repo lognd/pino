@@ -40,11 +40,17 @@ export interface BookingDetailResponse {
   location_addr: string;
   can_cancel_online: boolean;
   // TODO(types): api/bookings.py's BookingDetailResponse does not send
-  // invoice_id yet (deposit invoicing is P4, docs/design/05) -- this
-  // field is a forward-compatible placeholder so ManageBooking.tsx's
-  // invoice-link stub can render the moment the backend adds it, with no
-  // ManageBooking.tsx change required.
-  invoice_id?: string | null;
+  // this yet (deposit invoicing is P4, docs/design/05) -- this field is
+  // a forward-compatible placeholder so ManageBooking.tsx's invoice-link
+  // can render the moment the backend adds it, with no ManageBooking.tsx
+  // change required. Deliberately a full pay URL (mirrors
+  // BookingCreateResponse.manage_url's own "hand back the whole signed
+  // URL, not a raw id" pattern), NOT the invoice's raw id/primary key --
+  // /pay/{token} resolves a 256-bit invoice-scoped pay token
+  // (service.find_invoice_by_pay_token), never the invoice row's id, so
+  // a raw id here would silently 404 every time (and worse, would invite
+  // guessing invoice ids to probe balances -- docs/design/02).
+  invoice_pay_url?: string | null;
 }
 
 /** POST /api/bookings -- rate-limited 5/hour (RateLimitedError on 429),

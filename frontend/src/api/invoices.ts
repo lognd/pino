@@ -1,11 +1,13 @@
-// Invoice + payment-link reads for the guest /pay/:token flow and the
-// admin Invoices mockup screen. See docs/design/05-payments-and-invoicing.md
-// and docs/design/14-admin-mockup.md. CRIB:
-// logand.app/frontend/src/api/invoices.ts for the Invoice interface shape
-// and snake_case-matches-backend-JSON discipline (see that file's own
-// comment on why camelCase drift there was a real bug).
+// Admin invoice reads/writes for the Invoices + Record payment mockup
+// screens. See docs/design/14-admin-mockup.md. CRIB:
+// logand.app/frontend/src/api/invoices.ts for the snake_case-matches-
+// backend-JSON discipline (see that file's own comment on why camelCase
+// drift there was a real bug).
 //
-// TODO(impl): docs/design/05-payments-and-invoicing.md
+// The guest /pay/:token flow (docs/design/05-payments-and-invoicing.md)
+// lives entirely in src/api/pay.ts, not here -- it hits a different
+// backend router (api/invoices_public.py's `/api/pay` prefix) with a
+// different, invoice-scoped-token auth model than the admin routes below.
 
 import { apiGet, apiPost } from "./client";
 
@@ -14,10 +16,6 @@ export interface Invoice {
   status: "unpaid" | "partial" | "paid";
   amount_due: string;
   amount_paid: string;
-}
-
-export function fetchInvoiceByToken(_token: string): Promise<Invoice> {
-  return apiGet<Invoice>(`/api/invoices/pay/${_token}`);
 }
 
 // --- Admin surface (docs/design/14-admin-mockup.md's Invoices + Record

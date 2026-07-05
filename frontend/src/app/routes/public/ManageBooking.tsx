@@ -5,7 +5,9 @@
 // either). Supports cancel (with the "too close to start time" window
 // error in plain words) and resend-confirmation. Invoice link is a P4
 // stub (docs/design/05) -- rendered only if the backend ever sends an
-// invoice_id (it does not yet, see api/bookings.ts's TODO(types) note).
+// invoice_pay_url (it does not yet, see api/bookings.ts's TODO(types)
+// note); a REAL link to the pay page once it does, not a hand-built
+// path -- see that note for why a raw invoice id would never work here.
 
 import { useState } from "react";
 import { useParams } from "react-router-dom";
@@ -151,9 +153,9 @@ export function ManageBooking() {
             <p className="text-lg text-mp-white">{T.cancelWindowClosedNote}</p>
           )}
 
-          {bookingQuery.data.invoice_id && (
+          {bookingQuery.data.invoice_pay_url && (
             <a
-              href={`/pay/${bookingQuery.data.invoice_id}`}
+              href={bookingQuery.data.invoice_pay_url}
               className="text-lg font-semibold text-mp-red-text underline"
             >
               {T.invoiceLinkLabel}

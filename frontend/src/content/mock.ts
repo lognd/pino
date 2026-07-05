@@ -142,6 +142,39 @@ export interface Content {
       invoiceLinkLabel: string;
     };
   };
+  pay: {
+    heading: string;
+    notFoundHeading: string;
+    notFoundNote: string;
+    paidHeading: string;
+    paidNote: string;
+    notPayableNote: string;
+    amountDueLabel: string;
+    methodsHeading: string;
+    cardCta: string;
+    cardPendingNote: string;
+    cardStartedHeading: string;
+    cardStartedNote: string;
+    paypalCta: string;
+    paypalRedirectingNote: string;
+    paypalFinishingHeading: string;
+    paypalFinishingNote: string;
+    paypalSucceededNote: string;
+    paypalPendingNote: string;
+    paypalFailedNote: string;
+    zelleHeading: string;
+    zelleHandleLabel: string;
+    zelleReferenceLabel: string;
+    proofUploadLabel: string;
+    proofUploadCta: string;
+    proofUploadedNote: string;
+    proofUnavailableNote: string;
+    proofBadTypeNote: string;
+    inPersonHeading: string;
+    inPersonNote: string;
+    rateLimitedNote: string;
+    genericErrorNote: string;
+  };
   notices: {
     notLegalAdvice: string;
     eligibility: string;
@@ -391,6 +424,44 @@ export const CONTENT: Content = {
       resendSentNote: "We sent your confirmation email again.",
       invoiceLinkLabel: "View invoice / pay deposit",
     },
+  },
+  pay: {
+    heading: "Pay your invoice",
+    notFoundHeading: "We could not find that invoice",
+    notFoundNote:
+      "This link may be expired or mistyped. Call us and we can look up your invoice over the phone.",
+    paidHeading: "This invoice is paid",
+    paidNote: "Thank you -- there is nothing left to pay on this invoice.",
+    notPayableNote: "This invoice is not ready to be paid online right now. Please call us.",
+    amountDueLabel: "Amount due",
+    methodsHeading: "Choose how to pay",
+    cardCta: "Pay by card",
+    cardPendingNote: "Starting your card payment...",
+    cardStartedHeading: "SAMPLE -- Card payment coming soon",
+    cardStartedNote:
+      "SAMPLE -- TODO(P7): card payment on this page goes live at deploy. Your payment was not " +
+      "charged yet -- please use PayPal, Zelle, or pay in person for now, or call us and we will " +
+      "take your card over the phone.",
+    paypalCta: "Pay with PayPal",
+    paypalRedirectingNote: "Redirecting you to PayPal...",
+    paypalFinishingHeading: "Finishing your PayPal payment",
+    paypalFinishingNote: "Please wait a moment while we confirm your PayPal payment.",
+    paypalSucceededNote: "Payment received. Thank you!",
+    paypalPendingNote: "Your payment is being reviewed by PayPal -- we will email you once it clears.",
+    paypalFailedNote: "We could not confirm your PayPal payment. Call us if you were charged.",
+    zelleHeading: "Pay by Zelle",
+    zelleHandleLabel: "Send to this Zelle handle",
+    zelleReferenceLabel: "Please include this reference number with your Zelle payment",
+    proofUploadLabel: "Already sent it? Upload a screenshot as proof (optional)",
+    proofUploadCta: "Upload proof",
+    proofUploadedNote: "Uploaded. We will take a look and mark your invoice paid.",
+    proofUnavailableNote:
+      "Uploading proof online isn't available yet. Call us and we will confirm your payment over the phone.",
+    proofBadTypeNote: "Please choose a photo or PDF file.",
+    inPersonHeading: "Pay in person",
+    inPersonNote: "You can always pay in person at your next class -- cash, card, or check. Call us with any questions.",
+    rateLimitedNote: "Too many attempts.",
+    genericErrorNote: "Something went wrong. Please try again, or call us.",
   },
   notices: {
     notLegalAdvice,

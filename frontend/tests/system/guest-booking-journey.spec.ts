@@ -86,7 +86,17 @@ test.describe("Guest booking journey", () => {
   );
 
   test.skip("pays a deposit course via fake-stripe and the invoice shows paid", async () => {
-    // TODO(impl): docs/design/05-payments-and-invoicing.md -- deposits/
-    // invoicing/Pay page are P4 scope, not yet built (see TODO.md).
+    // TODO(impl): docs/design/05-payments-and-invoicing.md -- the Pay
+    // page itself (src/app/routes/public/Pay.tsx, src/api/pay.ts) is now
+    // built against api/invoices_public.py's real /api/pay/{token}
+    // contract, but this end-to-end path still needs two things this
+    // pass could not provide: (1) a real backend + Postgres stood up by
+    // hand for the "fullstack" project (see playwright.config.ts's own
+    // note -- not done here since another agent's backend tree was being
+    // edited concurrently, and this pass was told not to run backend
+    // commands while that's true), and (2) seed data for a deposit-
+    // bearing course/session (the current seed is one capacity=2 "Group
+    // Technique Class" with no deposit) plus a fake-stripe webhook
+    // fixture to actually settle the invoice. Un-skip once both exist.
   });
 });

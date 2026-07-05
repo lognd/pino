@@ -36,7 +36,11 @@ export class ApiError extends Error {
 function isCsrfExemptPath(path: string): boolean {
   return (
     path.startsWith("/api/bookings/manage/") ||
-    path.startsWith("/api/invoices/pay/")
+    // Matches the real backend router prefix -- api/invoices_public.py's
+    // `router = APIRouter(prefix="/api/pay", ...)` and app.py's
+    // _CSRF_EXEMPT_PREFIXES, NOT "/api/invoices/pay/" (a stale guess from
+    // before that router landed; found while wiring src/api/pay.ts).
+    path.startsWith("/api/pay/")
   );
 }
 
@@ -49,8 +53,20 @@ async function request<T>(
   const init: RequestInit = { method, headers, credentials: "include" };
 
   if (body !== undefined) {
-    headers["Content-Type"] = "application/json";
-    init.body = JSON.stringify(body);
+    if (body instanceof FormData) {
+      // No Content-Type here -- the browser sets
+      // "multipart/form-data; boundary=..." itself from the FormData's
+      // real boundary, which a hardcoded "application/json" (or any
+      // hardcoded multipart header without the boundary) would break.
+      // Found wiring src/api/pay.ts's uploadPaymentProof: every prior
+      // caller of apiPost only ever sent plain objects, so this branch
+      // never existed and every multipart upload would have silently
+      // JSON.stringify'd a FormData instance into "{}" instead.
+      init.body = body;
+    } else {
+      headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify(body);
+    }
   }
   if (method !== "GET" && !isCsrfExemptPath(path)) {
     headers["X-CSRF-Token"] = "mock-csrf-token";

@@ -75,24 +75,26 @@ export function Shell({ children }: { children: ReactNode }) {
           className="mx-auto flex max-w-6xl items-center justify-between gap-4"
         >
           {/* Wordmark-logo home link -- shown on every page except landing
-              (doc 09's revised backlink rule). A spacer keeps the nav links
-              right-aligned on landing where the logo is absent. */}
-          {onLanding ? (
-            <span aria-hidden="true" />
-          ) : (
-            <Link
-              to={CONTENT.nav.home.path}
-              className="flex min-w-0 items-center gap-2"
-              {...bulletProps}
-            >
-              {/* Inline StaticWordmark, not the <img> asset: the backlink
-                  logo must be EXACTLY the landing lockup (same letters,
-                  same webfont, uncracked) -- an <img> SVG cannot use the
-                  page font. Explicit aspect + height (no auto sizing). */}
-              <StaticWordmark className="aspect-[48/19] h-10" />
-              <span className="sr-only">{businessShortName} -- home</span>
-            </Link>
-          )}
+              (doc 09's revised backlink rule). ALWAYS mounted and opacity-
+              faded instead of unmounted: navigating home used to blink the
+              logo away instantly, which read as jarring. While on landing
+              it is invisible, non-interactive, and out of the a11y tree. */}
+          <Link
+            to={CONTENT.nav.home.path}
+            className={`flex min-w-0 items-center gap-2 transition-opacity duration-500 ${
+              onLanding ? "pointer-events-none opacity-0" : "opacity-100"
+            }`}
+            aria-hidden={onLanding || undefined}
+            tabIndex={onLanding ? -1 : undefined}
+            {...bulletProps}
+          >
+            {/* Inline StaticWordmark, not the <img> asset: the backlink
+                logo must be EXACTLY the landing lockup (same letters,
+                same webfont, uncracked) -- an <img> SVG cannot use the
+                page font. Explicit aspect + height (no auto sizing). */}
+            <StaticWordmark className="aspect-[48/19] h-10" />
+            <span className="sr-only">{businessShortName} -- home</span>
+          </Link>
 
           {/* Full link row: lg and up only (it wraps/overlaps below that). */}
           <ul className="hidden items-center gap-6 lg:flex">

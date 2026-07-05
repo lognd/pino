@@ -138,7 +138,6 @@ async def cancel_session(
     """
     from melpino_backend.app.config import AppConfig
     from melpino_backend.db.models.bookings import Booking
-    from melpino_backend.db.models.invoices import Invoice
     from melpino_backend.domain.notifications import notify
 
     assert isinstance(cfg, AppConfig)
@@ -182,10 +181,24 @@ async def cancel_session(
         booking.cancelled_at = now
     flagged_paid_invoice_count = 0
     if invoice_ids:
-        from melpino_backend.domain.invoices.service import flag_invoice_needs_review
+        from melpino_backend.domain.invoices.service import (
+            flag_invoice_needs_review,
+            lock_invoice_for_update,
+        )
 
-        invoices_stmt = select(Invoice).where(Invoice.id.in_(invoice_ids))
-        invoices = list((await db.execute(invoices_stmt)).scalars().all())
+        # M1 (FINDINGS.md): lock each invoice FOR UPDATE, in a stable
+        # (sorted) order, before deciding void-vs-flag. A bare unlocked
+        # select races a concurrent Stripe webhook settlement -- see
+        # FINDINGS.md M1 for the exact interleaving this closes: without
+        # the lock, cancel_session could read a stale "sent" status,
+        # decide to void, then blind-overwrite a webhook's concurrent
+        # "paid" write with "void", losing the needs-review flag on a
+        # real collected payment.
+        invoices = []
+        for iid in sorted(invoice_ids):
+            invoice = await lock_invoice_for_update(db, iid)
+            if invoice is not None:
+                invoices.append(invoice)
         for invoice in invoices:
             if invoice.status in ("sent", "overdue"):
                 invoice.status = "void"

@@ -157,9 +157,7 @@ async def test_manage_token_expires_30_days_after_session_end(
         ends_at=datetime.now(timezone.utc) - timedelta(days=31)
     )
     raw_token, token_hash = mint_manage_token()
-    await make_booking(
-        session_id=ended_session.id, manage_token_hash=token_hash
-    )
+    await make_booking(session_id=ended_session.id, manage_token_hash=token_hash)
 
     result = await find_booking_by_token(db_session, raw_token)
     assert result.is_err

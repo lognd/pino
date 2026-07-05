@@ -33,9 +33,7 @@ def _docker_available() -> bool:
     if shutil.which("docker") is None:
         return False
     try:
-        result = subprocess.run(
-            ["docker", "info"], capture_output=True, timeout=10
-        )
+        result = subprocess.run(["docker", "info"], capture_output=True, timeout=10)
     except (OSError, subprocess.TimeoutExpired):
         return False
     return result.returncode == 0

@@ -257,9 +257,7 @@ async def cancel_booking(
     # double-click) can both pass it under READ COMMITTED. Re-fetching with
     # FOR UPDATE and re-asserting status here makes the loser a no-op
     # instead of re-running the cancel side effects (email, waitlist offer).
-    stmt = (
-        select(Booking).where(Booking.id == booking_id).with_for_update()
-    )
+    stmt = select(Booking).where(Booking.id == booking_id).with_for_update()
     booking = (await db.execute(stmt)).scalar_one()
     if booking.status != "confirmed":
         logger.info(

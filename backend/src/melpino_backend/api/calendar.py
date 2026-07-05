@@ -91,9 +91,7 @@ async def calendar_feed(
                 location=location,
             )
         )
-    body = build_calendar(
-        events, calendar_name=f"{_cfg.business_short_name} classes"
-    )
+    body = build_calendar(events, calendar_name=f"{_cfg.business_short_name} classes")
     logger.info("calendar_feed: served %d events", len(events))
     return PlainTextResponse(body, media_type="text/calendar; charset=utf-8")
 

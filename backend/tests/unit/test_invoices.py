@@ -68,9 +68,7 @@ async def test_invoice_pay_token_isolation(
     assert resolved.danger_ok.id != invoice_id_b
 
 
-async def test_pay_token_lookup_rejects_unknown_token(
-    db_session, app_config
-) -> None:
+async def test_pay_token_lookup_rejects_unknown_token(db_session, app_config) -> None:
     """A guessed/garbage token is InvoiceError.NotFound, not a crash."""
     bogus_token = derive_pay_token(app_config.session_secret, uuid4())
     result = await find_invoice_by_pay_token(db_session, bogus_token)

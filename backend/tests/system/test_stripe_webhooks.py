@@ -63,9 +63,7 @@ async def test_stripe_webhook_is_idempotent_under_at_least_once_delivery(
     payments = (
         (
             await db_session.execute(
-                select(Payment).where(
-                    Payment.stripe_payment_intent_id == "pi_test_123"
-                )
+                select(Payment).where(Payment.stripe_payment_intent_id == "pi_test_123")
             )
         )
         .scalars()

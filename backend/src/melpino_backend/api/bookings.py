@@ -265,9 +265,7 @@ async def get_booking_by_token_endpoint(
         if invoice is not None and invoice.status in ("sent", "overdue"):
             amount_due = await invoice_service.get_amount_due(db, invoice)
             if amount_due > 0:
-                pay_url = await invoice_service.pay_link_for_invoice(
-                    db, _cfg, invoice
-                )
+                pay_url = await invoice_service.pay_link_for_invoice(db, _cfg, invoice)
                 amount_due_str = str(amount_due)
 
     event = _booking_event(booking, session, course, manage_url_for(_cfg, token))

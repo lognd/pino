@@ -280,9 +280,7 @@ async def generate_invoice_pdf(
     line_items = (
         (
             await db.execute(
-                select(InvoiceLineItem).where(
-                    InvoiceLineItem.invoice_id == invoice_id
-                )
+                select(InvoiceLineItem).where(InvoiceLineItem.invoice_id == invoice_id)
             )
         )
         .scalars()

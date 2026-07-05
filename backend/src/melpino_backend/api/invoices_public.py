@@ -84,9 +84,7 @@ async def _resolve_invoice(db: AsyncSession, token: str) -> Invoice:
 
 
 @router.get("/{token}")
-async def get_invoice_status(
-    token: str, db: AsyncSession = Depends(get_db)
-) -> dict:
+async def get_invoice_status(token: str, db: AsyncSession = Depends(get_db)) -> dict:
     """GET /api/pay/{token} -- pay page data: amount due + configured
     payment methods. Token invalid -> 404 (never confirms existence)."""
     invoice = await _resolve_invoice(db, token)
@@ -102,9 +100,7 @@ async def get_invoice_status(
 
 
 @router.post("/{token}/payment-methods")
-async def check_payment_methods(
-    token: str, db: AsyncSession = Depends(get_db)
-) -> dict:
+async def check_payment_methods(token: str, db: AsyncSession = Depends(get_db)) -> dict:
     """POST /api/pay/{token}/payment-methods -- availability check scoped
     to a real invoice token (still 404s an invalid token, unlike the
     unauthenticated GET /api/config, which is deliberately fine to leak
@@ -114,9 +110,7 @@ async def check_payment_methods(
 
 
 @router.post("/{token}/stripe-intent")
-async def create_stripe_intent(
-    token: str, db: AsyncSession = Depends(get_db)
-) -> dict:
+async def create_stripe_intent(token: str, db: AsyncSession = Depends(get_db)) -> dict:
     """Creates a Stripe PaymentIntent for this invoice's remaining
     balance. The webhook (api/webhooks.py), not this endpoint, is what
     records the Payment row and settles the invoice -- this only ever
@@ -169,9 +163,7 @@ async def create_stripe_intent(
                 # confirmed too, charging twice; refuse instead.
                 raise to_http_exception(InvoiceError.InvalidState)
             if existing_intent["status"] != "canceled":
-                expected_minor = currency.to_minor_units(
-                    amount_due, invoice.currency
-                )
+                expected_minor = currency.to_minor_units(amount_due, invoice.currency)
                 if existing_intent["amount"] == expected_minor:
                     _log.info(
                         "stripe intent reused invoice_id=%s intent_id=%s",

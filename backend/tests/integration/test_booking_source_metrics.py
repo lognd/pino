@@ -149,9 +149,7 @@ async def test_calendar_feed_requires_the_key_and_serves_sessions(
         assert missing.status_code == 404
         wrong = await client.get("/api/calendar/feed.ics", params={"key": "nope"})
         assert wrong.status_code == 404
-        ok = await client.get(
-            "/api/calendar/feed.ics", params={"key": "feed-secret-1"}
-        )
+        ok = await client.get("/api/calendar/feed.ics", params={"key": "feed-secret-1"})
         assert ok.status_code == 200
         assert ok.headers["content-type"].startswith("text/calendar")
         body = ok.text

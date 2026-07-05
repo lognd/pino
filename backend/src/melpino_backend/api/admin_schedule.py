@@ -128,9 +128,7 @@ async def cancel_session(
     if result.is_err:
         raise to_http_exception(result.danger_err)
     class_session = result.danger_ok
-    logger.info(
-        "admin cancel_session: session_id=%s cancelled by staff", session_uuid
-    )
+    logger.info("admin cancel_session: session_id=%s cancelled by staff", session_uuid)
     return {"session_id": str(class_session.id), "status": class_session.status}
 
 

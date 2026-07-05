@@ -21,9 +21,7 @@ def _make_request(
     cookies: dict[str, str] | None = None,
     headers: dict[str, str] | None = None,
 ) -> Request:
-    raw_headers = [
-        (k.lower().encode(), v.encode()) for k, v in (headers or {}).items()
-    ]
+    raw_headers = [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()]
     if cookies:
         cookie_header = "; ".join(f"{k}={v}" for k, v in cookies.items())
         raw_headers.append((b"cookie", cookie_header.encode()))

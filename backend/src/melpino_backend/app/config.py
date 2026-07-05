@@ -176,7 +176,13 @@ class AppConfig(BaseModel):
         out: dict[str, object] = {}
         for env_key, field in env_map.items():
             value = os.environ.get(env_key)
-            if value is not None:
+            # A blank line ("REDIS_URL=") reads as "" from os.environ, not
+            # None -- treat it the same as unset so every "None means not
+            # configured" field (redis_url, payment_processor_secret,
+            # r2_bucket, ...) actually falls back to its documented
+            # unconfigured default instead of a truthy-but-empty string
+            # that downstream code (e.g. redis.from_url("")) chokes on.
+            if value:
                 out[field] = value
         return out
 

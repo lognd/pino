@@ -246,6 +246,36 @@ async def _handle_payment_intent_event(
         await db.commit()
         return
 
+    intent_currency = intent.get("currency")
+    if (
+        intent_currency is not None
+        and intent_currency.lower() != invoice.currency.lower()
+    ):
+        # Mirrors the PayPal capture guard in invoices_public.py (see
+        # FINDINGS.md L2/LOW-1): recording this amount as if it were
+        # invoice.currency would silently corrupt get_paid_so_far's
+        # raw-sum math. Not reachable today (create_stripe_intent always
+        # stamps currency=invoice.currency and nothing mutates it after),
+        # but kept as a defense-in-depth guard against a future intent
+        # whose currency has drifted from the invoice's.
+        _log.warning(
+            "stripe payment_intent currency mismatch -- refusing to record",
+            extra={
+                "invoice_id": str(invoice.id),
+                "stripe_payment_intent_id": intent_id,
+                "invoice_currency": invoice.currency,
+                "intent_currency": intent_currency,
+            },
+        )
+        await flag_invoice_needs_review(
+            db,
+            invoice,
+            f"stripe payment_intent currency mismatch "
+            f"(invoice={invoice.currency}, intent={intent_currency})",
+        )
+        await db.commit()
+        return
+
     try:
         # A SAVEPOINT, not a bare flush -- if the unique-index race fires,
         # only this failed INSERT rolls back, not the whole request.

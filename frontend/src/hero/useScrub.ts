@@ -1,5 +1,5 @@
 // Pointer -> activity-driven progress hook -- docs/design/08-landing-hero.md
-// (Revision 4).
+// (Revision 4 model, Revision 5 render path).
 //
 // A THIN rAF wrapper over the pure reducer in scrubMachine.ts: the hook owns the
 // single rAF loop, the pointer listeners, and the React state; ALL timing/
@@ -7,12 +7,16 @@
 // exists here and nowhere else, so the source and the Wordmark read one
 // `progress` and never desync.
 //
-// Revision 4 wiring: progress is no longer mapped to cursor X. This hook
-//   - accumulates pointer MOVEMENT (distance moved / hero diagonal) per tick and
-//     hands it to the machine as `moveAmount` (energy -> forward playback);
-//   - detects the pointer FIRST entering the wordmark bounds (via `wordmarkRef`)
-//     and raises `wordmarkHit` -> break-on-reach fires the shot;
-//   - never preventDefault's, so touch scrolling is never hijacked.
+// REVISION 5 (the "laggy" verdict): progress is NO LONGER published through
+// React state every frame -- that re-rendered the whole hero tree at 60fps.
+// The rAF loop hands each frame to `onFrame` (canvas render + imperative
+// wordmark writes); the returned ScrubState only updates on mode/lowPower
+// CHANGES plus a ~4Hz throttled readout (for /hero-lab), and not at all while
+// parked at rest.
+//
+// Revision 4 wiring (unchanged): movement energy -> forward playback;
+// `wordmarkHit` -> break-on-reach; never preventDefault, so touch scrolling is
+// never hijacked.
 
 import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
@@ -20,6 +24,7 @@ import { initialScrubState, step, DEFAULT_SETTLE_MS } from "./scrubMachine";
 import type { ScrubMachineState, ScrubMode } from "./scrubMachine";
 
 export interface ScrubState {
+  /** Progress readout, throttled (~4Hz). Frame-accurate values go to onFrame. */
   progress: number;
   /** True while the sequence is easing home / resting after idle. */
   isSettling: boolean;
@@ -42,7 +47,13 @@ export interface UseScrubOptions {
   touch?: boolean;
   /** The wordmark element; entering its bounds fires break-on-reach. */
   wordmarkRef?: RefObject<HTMLElement | null>;
+  /** Called every rAF tick with the frame-accurate progress; do the actual
+   * drawing here (canvas render + wordmark handle), NOT off React state. */
+  onFrame?: (progress: number, machine: Readonly<ScrubMachineState>) => void;
 }
+
+/** Minimum ms between throttled readout state updates. */
+const READOUT_INTERVAL_MS = 250;
 
 const PARKED: ScrubState = {
   progress: 0,
@@ -62,6 +73,10 @@ export function useScrub(
   const touch = options.touch ?? false;
   const wordmarkRef = options.wordmarkRef;
   const [state, setState] = useState<ScrubState>(PARKED);
+
+  // Latest onFrame without re-subscribing the whole loop on identity changes.
+  const onFrameRef = useRef<UseScrubOptions["onFrame"]>(options.onFrame);
+  onFrameRef.current = options.onFrame;
 
   // Movement accumulated since the last consumed frame (fraction of diagonal).
   const pendingMove = useRef<number>(0);
@@ -127,6 +142,10 @@ export function useScrub(
 
     let raf = 0;
     let last = performance.now();
+    // Readout throttling: publish to React state only when the mode/lowPower
+    // flip (always) or the readout interval elapsed AND something changed.
+    let lastReadoutMs = 0;
+    let published = PARKED;
     const tick = (now: number): void => {
       const dtMs = now - last;
       last = now;
@@ -143,14 +162,29 @@ export function useScrub(
         pointerLeft,
       });
       machine.current = nextMachine;
-      setState({
-        progress: nextMachine.progress,
-        isSettling: nextMachine.mode === "settle",
-        mode: nextMachine.mode,
-        energy: nextMachine.energy,
-        fps: nextMachine.fps,
-        lowPower: nextMachine.belowThreshold,
-      });
+
+      onFrameRef.current?.(nextMachine.progress, nextMachine);
+
+      const modeChanged =
+        nextMachine.mode !== published.mode ||
+        nextMachine.belowThreshold !== published.lowPower;
+      const readoutDue =
+        now - lastReadoutMs >= READOUT_INTERVAL_MS &&
+        (Math.abs(nextMachine.progress - published.progress) > 1e-4 ||
+          Math.abs(nextMachine.energy - published.energy) > 1e-3 ||
+          Math.abs(nextMachine.fps - published.fps) > 0.5);
+      if (modeChanged || readoutDue) {
+        lastReadoutMs = now;
+        published = {
+          progress: nextMachine.progress,
+          isSettling: nextMachine.mode === "settle",
+          mode: nextMachine.mode,
+          energy: nextMachine.energy,
+          fps: nextMachine.fps,
+          lowPower: nextMachine.belowThreshold,
+        };
+        setState(published);
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);

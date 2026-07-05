@@ -8,8 +8,8 @@
 // wires the wordmark bounds for break-on-reach. It intentionally does NOT reuse
 // <Hero/>: the lab reaches inside the progress signal (override it, read fps).
 
-import { useEffect, useRef, useState } from "react";
-import { Wordmark } from "./Wordmark";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Wordmark, type WordmarkHandle } from "./Wordmark";
 import { useScrub } from "./useScrub";
 import { useBulletholeClicks } from "./useBulletholeClicks";
 import { DEFAULT_SETTLE_MS } from "./scrubMachine";
@@ -38,7 +38,11 @@ export function HeroLab() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wordmarkRef = useRef<HTMLDivElement>(null);
+  const wordmarkHandle = useRef<WordmarkHandle>(null);
   const sourceRef = useRef<ScrubSource | null>(null);
+  // Frame-accurate progress of the most recent draw (rAF or manual), for
+  // repainting on variant swaps without waiting for the next frame.
+  const progressRef = useRef(0);
 
   const [sourceKind, setSourceKind] = useState<HeroSourceKind>(() =>
     resolveHeroSourceKind(import.meta.env.VITE_HERO_SOURCE),
@@ -53,7 +57,19 @@ export function HeroLab() {
   const [impactFy, setImpactFy] = useState(DEFAULT_IMPACT_FY);
   const [variant, setVariant] = useState<FlashVariant>(DEFAULT_FLASH_VARIANT);
 
-  const scrub = useScrub(containerRef, { enabled: !override, settleMs, wordmarkRef });
+  // Revision 5: drawing happens per rAF frame here, not off React state.
+  const onFrame = useCallback((p: number): void => {
+    progressRef.current = p;
+    sourceRef.current?.render(p);
+    wordmarkHandle.current?.setProgress(p);
+  }, []);
+
+  const scrub = useScrub(containerRef, {
+    enabled: !override,
+    settleMs,
+    wordmarkRef,
+    onFrame,
+  });
   const progress = override ? manual : scrub.progress;
 
   const bullets = useBulletholeClicks();
@@ -102,15 +118,17 @@ export function HeroLab() {
     const source = sourceRef.current;
     if (source && hasVariant(source)) {
       source.setVariant(variant);
-      source.render(progress);
+      source.render(progressRef.current);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variant]);
 
-  // Redraw on every progress change (pointer, settle, or manual override).
+  // Manual override: drive the same imperative path the rAF loop uses.
   useEffect(() => {
-    sourceRef.current?.render(progress);
-  }, [progress]);
+    if (!override) return;
+    progressRef.current = manual;
+    sourceRef.current?.render(manual);
+    wordmarkHandle.current?.setProgress(manual);
+  }, [override, manual]);
 
   const row = { display: "flex", gap: 8, alignItems: "center" } as const;
 
@@ -145,7 +163,7 @@ export function HeroLab() {
         >
           <div ref={wordmarkRef} style={{ width: "75%", maxWidth: 768 }}>
             <Wordmark
-              progress={progress}
+              ref={wordmarkHandle}
               impactFx={impactFx}
               impactFy={impactFy}
               className="hero-lab-wordmark"

@@ -253,10 +253,24 @@ export function buildShards(options: BuildShardsOptions = {}): {
   for (let k = 0; k < n; k++) {
     const A = primaries[k];
     const B = primaries[(k + 1) % n];
-    const set = new Set<number>([...A.params, ...B.params]);
-    set.add(0.045 + (hash01(k * 23 + 1) - 0.5) * 0.02);
-    set.add(0.11 + (hash01(k * 23 + 2) - 0.5) * 0.03);
-    const fs = [...set].filter((v) => v >= 0 && v <= 1).sort((a, b) => a - b);
+    // Radial band boundaries: the two near-impact splits (splintery cells by
+    // the impact) plus at most MAX_MID_BOUNDS mid-range kink params sampled
+    // evenly from both primaries' kinks. Capping the band count keeps the
+    // shard total ~60 instead of 120+ -- each shard paints the full clipped
+    // lockup every frame, so shard count is the hero's paint budget.
+    const near1 = 0.045 + (hash01(k * 23 + 1) - 0.5) * 0.02;
+    const near2 = 0.11 + (hash01(k * 23 + 2) - 0.5) * 0.03;
+    const kinkSet = new Set<number>([...A.params, ...B.params]);
+    const mids = [...kinkSet].filter((v) => v > 0.15 && v < 1 - 1e-9).sort((a, b) => a - b);
+    const MAX_MID_BOUNDS = 2;
+    const chosen: number[] = [];
+    for (let m = 0; m < Math.min(MAX_MID_BOUNDS, mids.length); m++) {
+      const idx = Math.floor(((m + 1) * mids.length) / (Math.min(MAX_MID_BOUNDS, mids.length) + 1));
+      chosen.push(mids[Math.min(idx, mids.length - 1)]);
+    }
+    const fs = [...new Set([0, near1, near2, ...chosen, 1])]
+      .filter((v) => v >= 0 && v <= 1)
+      .sort((a, b) => a - b);
 
     for (let j = 1; j < fs.length; j++) {
       const f0 = fs[j - 1];

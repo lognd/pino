@@ -14,13 +14,21 @@
 // The visual region is aria-hidden decoration; the real <h1> business name
 // lives on the Landing route (App.tsx), not here.
 
-import { useEffect, useRef, useState } from "react";
-import { Wordmark } from "./Wordmark";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Wordmark, type WordmarkHandle } from "./Wordmark";
 import { useScrub } from "./useScrub";
 import { prefersReducedMotion, isTouchDevice } from "./env";
 import type { ScrubSource } from "./timeline";
 import { createHeroSource, resolveHeroSourceKind } from "./sources/select";
 import { logWarn } from "../lib/logging";
+
+/** Sources may expose a quiescence probe (SimulatedSource does): true means
+ * re-rendering the same progress repaints identical pixels, so idle frames
+ * can be skipped entirely (zero canvas work while parked at rest). */
+function isQuiescent(source: ScrubSource, progress: number): boolean {
+  const probe = (source as { isQuiescent?: (p: number) => boolean }).isQuiescent;
+  return typeof probe === "function" ? probe.call(source, progress) : false;
+}
 
 const POSTER_URL = "/brand/hero-poster.svg";
 const MAX_DPR = 2;
@@ -31,10 +39,19 @@ export function Hero() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wordmarkRef = useRef<HTMLDivElement>(null);
+  const wordmarkHandle = useRef<WordmarkHandle>(null);
   const sourceRef = useRef<ScrubSource | null>(null);
   const [mode, setMode] = useState<HeroMode>("poster");
   const [reduced] = useState<boolean>(prefersReducedMotion);
   const [touch] = useState<boolean>(isTouchDevice);
+
+  // Revision 5: all per-frame drawing happens HERE, off the rAF loop --
+  // canvas render + imperative wordmark writes. No React state per frame.
+  const onFrame = useCallback((progress: number): void => {
+    const source = sourceRef.current;
+    if (source && !isQuiescent(source, progress)) source.render(progress);
+    wordmarkHandle.current?.setProgress(progress);
+  }, []);
 
   // Revision 4: the wordmark element feeds break-on-reach -- the pointer/touch
   // first entering its bounds fires the shot (useScrub raises the hit signal).
@@ -42,6 +59,7 @@ export function Hero() {
     enabled: mode === "live" && !reduced,
     touch,
     wordmarkRef,
+    onFrame,
   });
 
   // Lazy source init behind requestIdleCallback so Landing LCP (the poster)
@@ -96,13 +114,6 @@ export function Hero() {
     };
   }, [reduced]);
 
-  // Draw the current frame whenever progress changes (source render is pure
-  // in progress, so this is allocation-free after init).
-  useEffect(() => {
-    if (mode !== "live") return;
-    sourceRef.current?.render(scrub.progress);
-  }, [mode, scrub.progress]);
-
   // Rung 4: low-power guard -> drop to poster + one log line.
   useEffect(() => {
     if (!scrub.lowPower || mode !== "live") return;
@@ -150,7 +161,7 @@ export function Hero() {
       {showLiveCanvas && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div ref={wordmarkRef} className="w-3/4 max-w-3xl">
-            <Wordmark progress={scrub.progress} className="w-full" />
+            <Wordmark ref={wordmarkHandle} className="w-full" />
           </div>
         </div>
       )}
